@@ -18,7 +18,7 @@ async def get_feed(limit: int = 10, offset: int = 0):
     except Exception as e:
         return error_response(str(e), status_code=500)
 
-@router.post("/create_feed", response_model=FeedItemResponse)
+@router.post("/create_feed")
 async def createss_feed_item(
     title: str = Form(...),
     content_type: str = Form(...),

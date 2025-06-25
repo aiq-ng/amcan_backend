@@ -7,7 +7,7 @@ from shared.response import success_response, error_response
 
 router = APIRouter()
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register")
 async def register(user: UserCreate):
     try:
         user_data = await AuthManager.register(user)

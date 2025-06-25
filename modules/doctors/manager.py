@@ -13,18 +13,27 @@ class DoctorManager:
             # Assuming you have a doctors table and are inserting/fetching data
             row = await conn.fetchrow(
                 """
-                INSERT INTO doctors (full_name, title, bio, experience_years, patients_count, location, user_id, availability)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id, full_name, title, bio, experience_years, patients_count, location, created_at, user_id, availability
+                INSERT INTO doctors (title, bio, experience_years, patients_count, location, user_id, availability)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, title, bio, experience_years, patients_count, location, created_at, user_id, availability
                 """,
-                doctor_item.full_name,
                 doctor_item.title,
                 doctor_item.bio,
                 doctor_item.experience_years,
                 doctor_item.patients_count,
                 doctor_item.location,
-                user_id,
+                doctor_item.user_id,
                 json.dumps([{"day": slot.day, "slots": slot.slots} for slot in doctor_item.availability]) # Convert Availability to list of dicts
+            )
+
+            # Update the user to set is_doctor = TRUE for the given user_id
+            await conn.execute(
+                """
+                UPDATE users
+                SET is_doctor = TRUE
+                WHERE id = $1
+                """,
+                doctor_item.user_id
             )
 
             result = dict(row)
@@ -49,7 +58,7 @@ class DoctorManager:
         async with db.get_connection() as conn:
             rows = await conn.fetch(
                 """
-                SELECT d.id, d.full_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
+                SELECT d.id, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
                        COUNT(r.id) as review_count, AVG(r.rating) as avg_rating
                 FROM doctors d
                 LEFT JOIN reviews r ON d.id = r.doctor_id
@@ -80,7 +89,7 @@ class DoctorManager:
         async with db.get_connection() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT d.id, d.full_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
+                SELECT d.id, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
                        COUNT(r.id) as review_count, AVG(r.rating) as avg_rating
                 FROM doctors d
                 LEFT JOIN reviews r ON d.id = r.doctor_id

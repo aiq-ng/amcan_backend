@@ -61,3 +61,38 @@ class AppointmentManager:
                 user_id
             )
             return [dict(row) for row in rows]
+        
+
+    @staticmethod
+    async def confirm_appointment(appointment_id: int, user_id: int) -> dict:
+        async with db.get_connection() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE appointments
+                SET status = 'confirmed'
+                WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'cancelled')
+                RETURNING id, doctor_id, user_id, slot_time, status, created_at
+                """,
+                appointment_id,
+                user_id
+            )
+            if not row:
+                raise ValueError("Appointment not found or cannot be confirmed")
+            return dict(row)
+
+    @staticmethod
+    async def cancel_appointment(appointment_id: int, user_id: int) -> dict:
+        async with db.get_connection() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE appointments
+                SET status = 'cancelled'
+                WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'confirmed')
+                RETURNING id, doctor_id, user_id, slot_time, status, created_at
+                """,
+                appointment_id,
+                user_id
+            )
+            if not row:
+                raise ValueError("Appointment not found or cannot be cancelled")
+            return dict(row)

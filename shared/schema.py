@@ -1,3 +1,4 @@
+# shared/schema.py
 from shared.db import db
 
 async def create_tables():
@@ -10,13 +11,13 @@ async def create_tables():
                 first_name VARCHAR(100),
                 last_name VARCHAR(100),
                 is_admin BOOLEAN DEFAULT FALSE,
+                is_doctor BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS doctors (
                 id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),  -- Removed UNIQUE constraint
-                full_name VARCHAR(255) NOT NULL,
+                user_id INTEGER REFERENCES users(id),
                 title VARCHAR(100),
                 bio TEXT,
                 experience_years INTEGER,
@@ -43,6 +44,16 @@ async def create_tables():
                 slot_time TIMESTAMP,
                 status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id SERIAL PRIMARY KEY,
+                appointment_id INTEGER REFERENCES appointments(id),
+                sender_id INTEGER REFERENCES users(id),
+                receiver_id INTEGER REFERENCES users(id),
+                message TEXT NOT NULL,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CHECK (sender_id != receiver_id)
             );
 
             CREATE TABLE IF NOT EXISTS feed_items (

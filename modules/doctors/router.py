@@ -21,7 +21,7 @@ class DecimalEncoder(json.JSONEncoder):
 router = APIRouter()
 
 
-@router.post("/doctors", response_model=DoctorResponse)
+@router.post("/doctors")
 async def create_doctor(doctor: DoctorCreate, current_admin: dict = Depends(get_current_admin)):
     try:
         doctor_data = await DoctorManager.create_doctor(doctor, current_admin["id"])

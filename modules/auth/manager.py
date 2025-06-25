@@ -19,7 +19,7 @@ class AuthManager:
                 """
                 INSERT INTO users (email, password_hash, first_name, last_name, is_admin)
                 VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, email, first_name, last_name, is_admin
+                RETURNING id, email, first_name, last_name, is_admin, is_doctor
                 """,
                 user.email,
                 password_hash,

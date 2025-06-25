@@ -6,7 +6,7 @@ class Availability(BaseModel):
     slots: List[str]
 
 class DoctorCreate(BaseModel):
-    full_name: str
+    user_id: int
     title: str
     bio: str
     experience_years: int
@@ -16,7 +16,7 @@ class DoctorCreate(BaseModel):
 
 class DoctorResponse(BaseModel):
     id: int
-    full_name: str
+    user_id: int
     title: str
     bio: str
     experience_years: int

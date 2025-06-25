@@ -7,6 +7,7 @@ class UserCreate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     is_admin: bool = False
+    is_doctor: bool = False
 
     @validator("password")
     def validate_password(cls, v):
@@ -20,3 +21,4 @@ class UserResponse(BaseModel):
     first_name: Optional[str]
     last_name: Optional[str]
     is_admin: bool
+    is_doctor: bool
