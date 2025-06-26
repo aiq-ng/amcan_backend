@@ -1,5 +1,6 @@
 # modules/chat/manager.py
 from .models import MessageCreate, MessageResponse
+from .utils import active_connections
 from shared.db import db
 
 class ChatManager:
@@ -74,3 +75,45 @@ class ChatManager:
                 appointment_id
             )
             return [dict(row) for row in rows]
+
+
+    @staticmethod
+    async def save_message(appointment_id: int, sender_id: int, receiver_id: int, message: str) -> dict:
+        async with db.get_connection() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO chat_messages (appointment_id, sender_id, receiver_id, message)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, appointment_id, sender_id, receiver_id, message, sent_at
+                """,
+                appointment_id,
+                sender_id,
+                receiver_id,
+                message
+            )
+            return dict(row)
+
+    # You should define active_connections at the module level or import it if managed elsewhere.
+    # Here is a simple in-memory example:
+    # active_connections = {}
+
+    @staticmethod
+    async def broadcast_message(appointment_id: int, message_data: dict):
+        import datetime
+        import copy
+
+        # Convert datetime objects to ISO format strings
+        def serialize(obj):
+            if isinstance(obj, dict):
+                return {k: serialize(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize(i) for i in obj]
+            elif isinstance(obj, datetime.datetime):
+                return obj.isoformat()
+            return obj
+
+        safe_message_data = serialize(copy.deepcopy(message_data))
+
+        if appointment_id in active_connections:
+            for _, websocket in active_connections[appointment_id].items():
+                await websocket.send_json(safe_message_data)

@@ -58,11 +58,13 @@ class DoctorManager:
         async with db.get_connection() as conn:
             rows = await conn.fetch(
                 """
-                SELECT d.id, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
-                       COUNT(r.id) as review_count, AVG(r.rating) as avg_rating
+                SELECT d.id, d.user_id, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
+                       COUNT(r.id) as review_count, AVG(r.rating) as avg_rating,
+                       u.id as user_id, u.email as doctor_email, u.first_name as doctor_first_name, u.last_name as doctor_last_name
                 FROM doctors d
                 LEFT JOIN reviews r ON d.id = r.doctor_id
-                GROUP BY d.id
+                LEFT JOIN users u ON d.user_id = u.id
+                GROUP BY d.id, u.id
                 ORDER BY d.created_at DESC
                 LIMIT $1 OFFSET $2
                 """,
@@ -89,12 +91,14 @@ class DoctorManager:
         async with db.get_connection() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT d.id, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
-                       COUNT(r.id) as review_count, AVG(r.rating) as avg_rating
+                SELECT d.id, d.user_id, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
+                       COUNT(r.id) as review_count, AVG(r.rating) as avg_rating,
+                       u.id as user_id, u.email as doctor_email, u.first_name as doctor_first_name, u.last_name as doctor_last_name
                 FROM doctors d
                 LEFT JOIN reviews r ON d.id = r.doctor_id
+                LEFT JOIN users u ON d.user_id = u.id
                 WHERE d.id = $1
-                GROUP BY d.id
+                GROUP BY d.id, u.id
                 """,
                 doctor_id
             )
