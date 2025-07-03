@@ -66,4 +66,15 @@ async def create_tables():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_by INTEGER REFERENCES users(id)
             );
+                           
+            CREATE TABLE IF NOT EXISTS video_calls (
+                id SERIAL PRIMARY KEY,
+                appointment_id INTEGER REFERENCES appointments(id),
+                initiator_id INTEGER REFERENCES users(id),
+                receiver_id INTEGER REFERENCES users(id),
+                start_time TIMESTAMP,
+                end_time TIMESTAMP,
+                status VARCHAR(20) DEFAULT 'initiated' CHECK (status IN ('initiated', 'active', 'ended')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         """)
