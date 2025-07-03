@@ -24,7 +24,7 @@ def hash_password(password: str) -> str:
     return hashed
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    logger.debug(f"Entered verify_password with plain_password: {plain_password}, hashed_password: {hashed_password}")
+    logger.info(f"Entered verify_password with plain_password: {plain_password}, hashed_password: {hashed_password}")
     result = bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
     logger.debug(f"Password verification result: {result}")
     logger.debug("Exiting verify_password")
