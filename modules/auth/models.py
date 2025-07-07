@@ -22,3 +22,11 @@ class UserResponse(BaseModel):
     last_name: Optional[str]
     is_admin: bool
     is_doctor: bool
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    is_admin: Optional[bool] = None
+    is_doctor: Optional[bool] = None
+

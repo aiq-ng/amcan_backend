@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
-from .models import UserCreate, UserResponse
+from .models import UserCreate, UserResponse, UserUpdate
 from .manager import AuthManager
 from .utils import get_current_admin, get_current_user
 from shared.response import success_response, error_response
@@ -47,3 +47,26 @@ async def get_all_users(current_admin: dict = Depends(get_current_admin)):
     except Exception as e:
         print(f"[AUTH] /users error: {e}")
         return error_response("Failed to retrieve users", status_code=500)
+    
+        # INSERT_YOUR_CODE
+
+@router.put("/users/{user_id}")
+async def update_user(user_id: int, update: UserUpdate, current_user: dict = Depends(get_current_user)):
+    try:
+        updated_user = await AuthManager.update_user(user_id, update.dict(exclude_unset=True), current_user)
+        return success_response(data=updated_user, message="User updated successfully")
+    except ValueError as e:
+        return error_response(str(e), status_code=403)
+    except Exception as e:
+        return error_response(str(e), status_code=500)
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: int, current_user: dict = Depends(get_current_admin)):
+    try:
+        deleted_user = await AuthManager.delete_user(user_id, current_user)
+        return success_response(data=deleted_user, message="User deleted successfully")
+    except ValueError as e:
+        return error_response(str(e), status_code=403)
+    except Exception as e:
+        return error_response(str(e), status_code=500)
+

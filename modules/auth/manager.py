@@ -56,7 +56,6 @@ class AuthManager:
             access_token = create_access_token(data={"sub": email})
             return access_token
 
-            # INSERT_YOUR_CODE
     @staticmethod
     async def get_all_users() -> list:
         logger.info("[AUTH MANAGER] get_all_users called")
@@ -70,3 +69,56 @@ class AuthManager:
             users = [dict(row) for row in rows]
             logger.info(f"[AUTH MANAGER] Retrieved {len(users)} users")
             return users
+
+    @staticmethod
+    async def update_user(user_id: int, update_data: dict, current_user: dict) -> dict:
+        logger.info(f"[AUTH MANAGER] update_user called for user_id: {user_id} by {current_user['email']}")
+        # Only allow if current user is admin or updating their own account
+        if not (current_user["is_admin"] or current_user["id"] == user_id):
+            logger.warning(f"[AUTH MANAGER] update_user forbidden for user_id: {user_id} by {current_user['email']}")
+            raise ValueError("Not authorized to update this user")
+        async with db.get_connection() as conn:
+            # Build update query dynamically
+            fields = []
+            values = []
+            if "email" in update_data and update_data["email"] is not None:
+                fields.append("email = $%d" % (len(values)+1))
+                values.append(update_data["email"])
+            if "first_name" in update_data and update_data["first_name"] is not None:
+                fields.append("first_name = $%d" % (len(values)+1))
+                values.append(update_data["first_name"])
+            if "last_name" in update_data and update_data["last_name"] is not None:
+                fields.append("last_name = $%d" % (len(values)+1))
+                values.append(update_data["last_name"])
+            
+            if "is_admin" in update_data and update_data["is_admin"] is not None and current_user["is_admin"]:
+                fields.append("is_admin = $%d" % (len(values)+1))
+                values.append(update_data["is_admin"])
+            if "is_doctor" in update_data and update_data["is_doctor"] is not None and current_user["is_admin"]:
+                fields.append("is_doctor = $%d" % (len(values)+1))
+                values.append(update_data["is_doctor"])
+            if not fields:
+                logger.warning(f"[AUTH MANAGER] No valid fields to update for user_id: {user_id}")
+                raise ValueError("No valid fields to update")
+            values.append(user_id)
+            query = f"UPDATE users SET {', '.join(fields)} WHERE id = $%d RETURNING id, email, first_name, last_name, is_admin, is_doctor" % (len(values))
+            result = await conn.fetchrow(query, *values)
+            if not result:
+                logger.warning(f"[AUTH MANAGER] User not found for update: {user_id}")
+                raise ValueError("User not found")
+            logger.info(f"[AUTH MANAGER] User updated successfully: {user_id}")
+            return dict(result)
+
+    @staticmethod
+    async def delete_user(user_id: int, current_user: dict) -> dict:
+        logger.info(f"[AUTH MANAGER] delete_user called for user_id: {user_id} by {current_user['email']}")
+        if not current_user["is_admin"]:
+            logger.warning(f"[AUTH MANAGER] delete_user forbidden for user_id: {user_id} by {current_user['email']}")
+            raise ValueError("Only admin can delete users")
+        async with db.get_connection() as conn:
+            result = await conn.fetchrow("DELETE FROM users WHERE id = $1 RETURNING id, email, first_name, last_name, is_admin, is_doctor", user_id)
+            if not result:
+                logger.warning(f"[AUTH MANAGER] User not found for delete: {user_id}")
+                raise ValueError("User not found")
+            logger.info(f"[AUTH MANAGER] User deleted successfully: {user_id}")
+            return dict(result)
