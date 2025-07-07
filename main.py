@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from shared.db import init_db
@@ -12,7 +13,10 @@ from modules.video_call.router import router as video_call_router
 
 app = FastAPI(title="Mental Health Therapy App")
 
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# Ensure uploads directory exists and use absolute path
+uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(feed_router, prefix="/feed", tags=["feed"])
