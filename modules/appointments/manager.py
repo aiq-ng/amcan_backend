@@ -2,6 +2,7 @@ import logging
 from .models import AppointmentCreate, AppointmentResponse
 from shared.db import db
 from datetime import datetime
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,15 @@ class AppointmentManager:
                     logger.warning(f"[APPOINTMENT MANAGER] Doctor not found: doctor_id={appointment.doctor_id}")
                     raise ValueError(f"Doctor not found (doctor_id={appointment.doctor_id})")
 
-                import json
-                try:
-                    availability = json.loads(doctor["availability"])
-                except Exception as e:
-                    logger.error(f"[APPOINTMENT MANAGER] Error parsing doctor availability: {e}")
-                    raise ValueError(f"Invalid doctor availability format: {e}")
+                # Before using availability, ensure it's a list of dicts
+                if isinstance(doctor["availability"], str):
+                    try:
+                        doctor["availability"] = json.loads(doctor["availability"])
+                    except Exception as e:
+                        print("Failed to parse availability:", e)
+                        doctor["availability"] = []
 
-                logger.debug(f"[APPOINTMENT MANAGER] Doctor availability for doctor_id={appointment.doctor_id}: {availability}")
+                logger.debug(f"[APPOINTMENT MANAGER] Doctor availability for doctor_id={appointment.doctor_id}: {doctor['availability']}")
 
                 try:
                     slot_day = appointment.slot_time.strftime("%a")  # e.g., 'Mon'
@@ -45,7 +47,7 @@ class AppointmentManager:
 
                 # Find the matching day in availability
                 try:
-                    day_avail = next((item for item in availability if item["day"] == slot_day), None)
+                    day_avail = next((item for item in doctor["availability"] if item.get("day") == slot_day), None)
                 except Exception as e:
                     logger.error(f"[APPOINTMENT MANAGER] Error searching for day in availability: {e}")
                     raise ValueError(f"Error searching for day in availability: {e}")
