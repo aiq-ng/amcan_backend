@@ -30,7 +30,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         print(f"[AUTH] /login error: {e}")
         return error_response(str(e), status_code=401)
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     print(f"[AUTH] /me called for user: {current_user.get('email', 'unknown')}")
     return success_response(data=current_user, message="User details retrieved")
