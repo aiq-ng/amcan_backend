@@ -105,11 +105,24 @@ class AppointmentManager:
         logger.info(f"[APPOINTMENT MANAGER] get_appointments called for user_id={user_id}")
         async with db.get_connection() as conn:
             rows = await conn.fetch(
-                """
-                SELECT id, doctor_id, user_id, slot_time, status, created_at
-                FROM appointments WHERE user_id = $1
-                ORDER BY slot_time DESC
-                """,
+                '''
+                SELECT 
+                    a.id AS appointment_id,
+                    a.doctor_id,
+                    a.user_id,
+                    a.slot_time,
+                    a.status,
+                    a.created_at,
+                    d.id AS doctor_id,
+                    d.title AS doctor_title,
+                    d.bio AS doctor_bio,
+                    d.rating AS doctor_rating,
+                    d.location AS doctor_location
+                FROM appointments a
+                JOIN doctors d ON a.doctor_id = d.id
+                WHERE a.user_id = $1
+                ORDER BY a.slot_time DESC
+                ''',
                 user_id
             )
             logger.info(f"[APPOINTMENT MANAGER] Retrieved {len(rows)} appointments for user_id={user_id}")
