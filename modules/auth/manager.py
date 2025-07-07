@@ -55,3 +55,18 @@ class AuthManager:
             logger.info(f"[AUTH MANAGER] Login successful for email: {email}")
             access_token = create_access_token(data={"sub": email})
             return access_token
+
+            # INSERT_YOUR_CODE
+    @staticmethod
+    async def get_all_users() -> list:
+        logger.info("[AUTH MANAGER] get_all_users called")
+        async with db.get_connection() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, email, first_name, last_name, is_admin, is_doctor
+                FROM users
+                """
+            )
+            users = [dict(row) for row in rows]
+            logger.info(f"[AUTH MANAGER] Retrieved {len(users)} users")
+            return users

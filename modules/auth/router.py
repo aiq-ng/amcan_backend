@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from .models import UserCreate, UserResponse
 from .manager import AuthManager
-from .utils import get_current_user
+from .utils import get_current_admin, get_current_user
 from shared.response import success_response, error_response
 
 
@@ -34,3 +34,16 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 async def get_me(current_user: dict = Depends(get_current_user)):
     print(f"[AUTH] /me called for user: {current_user.get('email', 'unknown')}")
     return success_response(data=current_user, message="User details retrieved")
+
+    # INSERT_YOUR_CODE
+@router.get("/users")
+async def get_all_users(current_admin: dict = Depends(get_current_admin)):
+    """
+    Endpoint to retrieve all users. Only accessible by admins.
+    """
+    try:
+        users = await AuthManager.get_all_users()
+        return success_response(data=users, message="All users retrieved successfully")
+    except Exception as e:
+        print(f"[AUTH] /users error: {e}")
+        return error_response("Failed to retrieve users", status_code=500)
