@@ -128,6 +128,7 @@ class AppointmentManager:
             logger.info(f"[APPOINTMENT MANAGER] Retrieved {len(rows)} appointments for user_id={user_id}")
             return [dict(row) for row in rows]
         
+    
 
     @staticmethod
     async def confirm_appointment(appointment_id: int, user_id: int) -> dict:
@@ -168,3 +169,64 @@ class AppointmentManager:
                 raise ValueError("Appointment not found or cannot be cancelled")
             logger.info(f"[APPOINTMENT MANAGER] Appointment cancelled: {dict(row)}")
             return dict(row)
+
+    @staticmethod
+    async def get_all_appointments() -> list:
+        logger.info(f"[APPOINTMENT MANAGER] get_all_appointments called (admin)")
+        async with db.get_connection() as conn:
+            rows = await conn.fetch(
+                '''
+                SELECT 
+                    a.id AS appointment_id,
+                    a.doctor_id,
+                    a.user_id,
+                    a.slot_time,
+                    a.status,
+                    a.created_at,
+                    d.id AS doctor_id,
+                    d.title AS doctor_title,
+                    d.bio AS doctor_bio,
+                    d.rating AS doctor_rating,
+                    d.location AS doctor_location
+                FROM appointments a
+                JOIN doctors d ON a.doctor_id = d.id
+                ORDER BY a.slot_time DESC
+                '''
+            )
+            logger.info(f"[APPOINTMENT MANAGER] Retrieved {len(rows)} appointments (admin)")
+            return [dict(row) for row in rows]
+
+    @staticmethod
+    async def get_appointment_by_id(appointment_id: int, current_user: dict) -> dict:
+        logger.info(f"[APPOINTMENT MANAGER] get_appointment_by_id called for appointment_id={appointment_id} by user_id={current_user['id']}")
+        async with db.get_connection() as conn:
+            row = await conn.fetchrow(
+                '''
+                SELECT 
+                    a.id AS appointment_id,
+                    a.doctor_id,
+                    a.user_id,
+                    a.slot_time,
+                    a.status,
+                    a.created_at,
+                    d.id AS doctor_id,
+                    d.title AS doctor_title,
+                    d.bio AS doctor_bio,
+                    d.rating AS doctor_rating,
+                    d.location AS doctor_location
+                FROM appointments a
+                JOIN doctors d ON a.doctor_id = d.id
+                WHERE a.id = $1
+                ''',
+                appointment_id
+            )
+            if not row:
+                logger.warning(f"[APPOINTMENT MANAGER] Appointment not found: {appointment_id}")
+                raise ValueError("Appointment not found")
+            appt = dict(row)
+            # Only allow if current user is admin or the user who booked the appointment
+            if not (current_user["is_admin"] or appt["user_id"] == current_user["id"]):
+                logger.warning(f"[APPOINTMENT MANAGER] Unauthorized access to appointment_id={appointment_id} by user_id={current_user['id']}")
+                raise ValueError("Not authorized to view this appointment")
+            logger.info(f"[APPOINTMENT MANAGER] Appointment retrieved: {appointment_id}")
+            return appt
