@@ -3,6 +3,8 @@ from .models import CallInitiate, CallResponse
 from shared.db import db
 from datetime import datetime
 
+active_calls = {}
+
 logger = logging.getLogger(__name__)
 
 class VideoCallManager:
