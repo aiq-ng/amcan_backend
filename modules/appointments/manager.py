@@ -9,57 +9,96 @@ class AppointmentManager:
     @staticmethod
     async def book_appointment(appointment: AppointmentCreate, user_id: int) -> dict:
         logger.info(f"[APPOINTMENT MANAGER] book_appointment called for user_id={user_id}, doctor_id={appointment.doctor_id}, slot_time={appointment.slot_time}")
-        async with db.get_connection() as conn:
-            # Check availability (ensure slot_time is within doctor's availability)
-            doctor = await conn.fetchrow(
-                "SELECT availability FROM doctors WHERE id = $1",
-                appointment.doctor_id
-            )
-            if not doctor:
-                logger.warning(f"[APPOINTMENT MANAGER] Doctor not found: doctor_id={appointment.doctor_id}")
-                raise ValueError("Doctor not found")
-            import json
-            availability = json.loads(doctor["availability"])
-            logger.debug(f"[APPOINTMENT MANAGER] Doctor availability for doctor_id={appointment.doctor_id}: {availability}")
+        try:
+            async with db.get_connection() as conn:
+                # Check availability (ensure slot_time is within doctor's availability)
+                try:
+                    doctor = await conn.fetchrow(
+                        "SELECT availability FROM doctors WHERE id = $1",
+                        appointment.doctor_id
+                    )
+                except Exception as e:
+                    logger.error(f"[APPOINTMENT MANAGER] Error fetching doctor: {e}")
+                    raise RuntimeError(f"Database error fetching doctor: {e}")
 
-            slot_day = appointment.slot_time.strftime("%a")  # e.g., 'Mon'
-            slot_time = appointment.slot_time.strftime("%-I:%M%p").replace("AM", "AM").replace("PM", "PM")  # e.g., '9:00AM'
-            logger.debug(f"[APPOINTMENT MANAGER] Requested slot_day={slot_day}, slot_time={slot_time}")
+                if not doctor:
+                    logger.warning(f"[APPOINTMENT MANAGER] Doctor not found: doctor_id={appointment.doctor_id}")
+                    raise ValueError(f"Doctor not found (doctor_id={appointment.doctor_id})")
 
-            # Find the matching day in availability
-            day_avail = next((item for item in availability if item["day"] == slot_day), None)
-            if not day_avail:
-                logger.warning(f"[APPOINTMENT MANAGER] No availability for day: {slot_day} (doctor_id={appointment.doctor_id})")
-            if not day_avail or slot_time not in day_avail["slots"]:
-                logger.warning(f"[APPOINTMENT MANAGER] Slot not available: {slot_time} on {slot_day} for doctor_id={appointment.doctor_id}")
-                raise ValueError("Slot not available")
+                import json
+                try:
+                    availability = json.loads(doctor["availability"])
+                except Exception as e:
+                    logger.error(f"[APPOINTMENT MANAGER] Error parsing doctor availability: {e}")
+                    raise ValueError(f"Invalid doctor availability format: {e}")
 
-            # Check if slot is already booked
-            existing = await conn.fetchrow(
-                """
-                SELECT 1 FROM appointments
-                WHERE doctor_id = $1 AND slot_time = $2
-                """,
-                appointment.doctor_id,
-                appointment.slot_time
-            )
-            if existing:
-                logger.warning(f"[APPOINTMENT MANAGER] Slot already booked: doctor_id={appointment.doctor_id}, slot_time={appointment.slot_time}")
-                raise ValueError("Slot already booked")
+                logger.debug(f"[APPOINTMENT MANAGER] Doctor availability for doctor_id={appointment.doctor_id}: {availability}")
 
-            row = await conn.fetchrow(
-                """
-                INSERT INTO appointments (doctor_id, user_id, slot_time, status)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id, doctor_id, user_id, slot_time, status, created_at
-                """,
-                appointment.doctor_id,
-                user_id,
-                appointment.slot_time,
-                'pending'
-            )
-            logger.info(f"[APPOINTMENT MANAGER] Appointment booked: {dict(row) if row else None}")
-            return dict(row)
+                try:
+                    slot_day = appointment.slot_time.strftime("%a")  # e.g., 'Mon'
+                    slot_time = appointment.slot_time.strftime("%-I:%M%p").replace("AM", "AM").replace("PM", "PM")  # e.g., '9:00AM'
+                except Exception as e:
+                    logger.error(f"[APPOINTMENT MANAGER] Error formatting slot_time: {e}")
+                    raise ValueError(f"Invalid slot_time format: {e}")
+
+                logger.debug(f"[APPOINTMENT MANAGER] Requested slot_day={slot_day}, slot_time={slot_time}")
+
+                # Find the matching day in availability
+                try:
+                    day_avail = next((item for item in availability if item["day"] == slot_day), None)
+                except Exception as e:
+                    logger.error(f"[APPOINTMENT MANAGER] Error searching for day in availability: {e}")
+                    raise ValueError(f"Error searching for day in availability: {e}")
+
+                if not day_avail:
+                    logger.warning(f"[APPOINTMENT MANAGER] No availability for day: {slot_day} (doctor_id={appointment.doctor_id})")
+                if not day_avail or slot_time not in day_avail.get("slots", []):
+                    logger.warning(f"[APPOINTMENT MANAGER] Slot not available: {slot_time} on {slot_day} for doctor_id={appointment.doctor_id}")
+                    raise ValueError(f"Slot not available: {slot_time} on {slot_day} for doctor_id={appointment.doctor_id}")
+
+                # Check if slot is already booked
+                try:
+                    existing = await conn.fetchrow(
+                        """
+                        SELECT 1 FROM appointments
+                        WHERE doctor_id = $1 AND slot_time = $2
+                        """,
+                        appointment.doctor_id,
+                        appointment.slot_time
+                    )
+                except Exception as e:
+                    logger.error(f"[APPOINTMENT MANAGER] Error checking existing appointment: {e}")
+                    raise RuntimeError(f"Database error checking existing appointment: {e}")
+
+                if existing:
+                    logger.warning(f"[APPOINTMENT MANAGER] Slot already booked: doctor_id={appointment.doctor_id}, slot_time={appointment.slot_time}")
+                    raise ValueError(f"Slot already booked: doctor_id={appointment.doctor_id}, slot_time={appointment.slot_time}")
+
+                try:
+                    row = await conn.fetchrow(
+                        """
+                        INSERT INTO appointments (doctor_id, user_id, slot_time, status)
+                        VALUES ($1, $2, $3, $4)
+                        RETURNING id, doctor_id, user_id, slot_time, status, created_at
+                        """,
+                        appointment.doctor_id,
+                        user_id,
+                        appointment.slot_time,
+                        'pending'
+                    )
+                except Exception as e:
+                    logger.error(f"[APPOINTMENT MANAGER] Error inserting appointment: {e}")
+                    raise RuntimeError(f"Database error inserting appointment: {e}")
+
+                if not row:
+                    logger.error(f"[APPOINTMENT MANAGER] Failed to book appointment for unknown reasons.")
+                    raise RuntimeError("Failed to book appointment for unknown reasons.")
+
+                logger.info(f"[APPOINTMENT MANAGER] Appointment booked: {dict(row)}")
+                return dict(row)
+        except Exception as exc:
+            logger.exception(f"[APPOINTMENT MANAGER] Exception in book_appointment: {exc}")
+            raise
 
     @staticmethod
     async def get_appointments(user_id: int) -> list:
