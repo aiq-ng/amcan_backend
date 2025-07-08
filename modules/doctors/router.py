@@ -21,7 +21,7 @@ class DecimalEncoder(json.JSONEncoder):
 router = APIRouter()
 
 
-@router.post("/doctors")
+@router.post("/")
 async def create_doctor(doctor: DoctorCreate, current_admin: dict = Depends(get_current_admin)):
     try:
         doctor_data = await DoctorManager.create_doctor(doctor, current_admin["id"])
@@ -30,7 +30,7 @@ async def create_doctor(doctor: DoctorCreate, current_admin: dict = Depends(get_
     except Exception as e:
         return error_response(str(e), status_code=400)
 
-@router.get("/doctors/{doctor_id}")
+@router.get("/{doctor_id}")
 async def get_doctor(doctor_id: int):
     try:
         doctor = await DoctorManager.get_doctor(doctor_id)
@@ -40,7 +40,7 @@ async def get_doctor(doctor_id: int):
     except Exception as e:
         return error_response(str(e), status_code=500)
 
-@router.get("/doctors")
+@router.get("/")
 async def get_all_doctors():
     try:
         doctors = await DoctorManager.get_doctors()
@@ -50,7 +50,7 @@ async def get_all_doctors():
     except Exception as e:
         return error_response(str(e), status_code=500)
 
-@router.post("/doctors/{doctor_id}/reviews")
+@router.post("/{doctor_id}/reviews")
 async def add_review(doctor_id: int, review: ReviewCreate, current_user: dict = Depends(get_current_user)):
     try:
         if review.rating < 1 or review.rating > 5:
