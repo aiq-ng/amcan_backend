@@ -34,27 +34,25 @@ class AppointmentManager:
 
                 logger.debug(f"[APPOINTMENT MANAGER] Doctor availability for doctor_id={appointment.doctor_id}: {availability}")
 
-                try:
-                    slot_day = appointment.slot_time.strftime("%a")  # e.g., 'Mon'
-                    slot_time = appointment.slot_time.strftime("%-I:%M%p").replace("AM", "AM").replace("PM", "PM")  # e.g., '9:00AM'
-                except Exception as e:
-                    logger.error(f"[APPOINTMENT MANAGER] Error formatting slot_time: {e}")
-                    raise ValueError(f"Invalid slot_time format: {e}")
-
-                logger.debug(f"[APPOINTMENT MANAGER] Requested slot_day={slot_day}, slot_time={slot_time}")
+                # --- NEW: Check availability by date and 24-hour time ---
+                slot_date = appointment.slot_time.strftime("%Y-%m-%d")  # e.g., "2025-07-12"
+                slot_time = appointment.slot_time.strftime("%H:%M")     # e.g., "09:00"
+                logger.debug(f"[APPOINTMENT MANAGER] Checking slot_date={slot_date}, slot_time={slot_time}")
 
                 # Find the matching day in availability
-                try:
-                    day_avail = next((item for item in availability if item["day"] == slot_day), None)
-                except Exception as e:
-                    logger.error(f"[APPOINTMENT MANAGER] Error searching for day in availability: {e}")
-                    raise ValueError(f"Error searching for day in availability: {e}")
-
+                logger.info(f"availability db", availability)
+                logger.info(f"payload slots", slot_date)
+                day_avail = next((item for item in availability if item["day"] == slot_date), None)
+                logger.debug(f"[APPOINTMENT MANAGER] day_avail for slot_date={slot_date}: {day_avail}")
                 if not day_avail:
-                    logger.warning(f"[APPOINTMENT MANAGER] No availability for day: {slot_day} (doctor_id={appointment.doctor_id})")
-                if not day_avail or slot_time not in day_avail.get("slots", []):
-                    logger.warning(f"[APPOINTMENT MANAGER] Slot not available: {slot_time} on {slot_day} for doctor_id={appointment.doctor_id}")
-                    raise ValueError(f"Slot not available: {slot_time} on {slot_day} for doctor_id={appointment.doctor_id}")
+                    logger.warning(f"[APPOINTMENT MANAGER] No availability for date: {slot_date} (doctor_id={appointment.doctor_id})")
+                    raise ValueError(f"No availability for date: {slot_date} {availability[0]["day"]} {availability[1]["day"]} for doctor_id={appointment.doctor_id}")
+
+                logger.debug(f"[APPOINTMENT MANAGER] Available slots for {slot_date}: {day_avail.get('slots', [])}")
+                if slot_time not in day_avail.get("slots", []):
+                    logger.warning(f"[APPOINTMENT MANAGER] Slot not available: {slot_time} on {slot_date} for doctor_id={appointment.doctor_id}")
+                    raise ValueError(f"Slot not available: {slot_time} on {slot_date} for doctor_id={appointment.doctor_id}")
+                # --- END NEW ---
 
                 # Check if slot is already booked
                 try:
