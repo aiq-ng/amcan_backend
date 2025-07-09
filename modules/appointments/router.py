@@ -20,7 +20,7 @@ async def book_appointment(appointment: AppointmentCreate, current_user: dict = 
 @router.get("/")
 async def get_appointments(current_user: dict = Depends(get_current_user)):
     try:
-        appointments = await AppointmentManager.get_appointments(current_user["id"])
+        appointments = await AppointmentManager.get_all_appointments()
         return success_response(data=appointments, message="Appointments retrieved successfully")
     except Exception as e:
         return error_response(str(e), status_code=500)
@@ -49,7 +49,7 @@ async def cancel_appointment(appointment_id: int, current_user: dict = Depends(g
 @router.get("/me")
 async def get_my_appointments(current_user: dict = Depends(get_current_user)):
     try:
-        appointments = await AppointmentManager.get_appointments(current_user["id"])
+        appointments = await AppointmentManager.get_appointment(current_user["id"])
         return {"success": True, "data": appointments, "message": "Appointments retrieved successfully"}
     except Exception as e:
         return {"success": False, "error": str(e), "message": "Failed to retrieve appointments"}

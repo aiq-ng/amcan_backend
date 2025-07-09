@@ -117,7 +117,7 @@ class AppointmentManager:
             raise
 
     @staticmethod
-    async def get_appointments(user_id: int) -> list:
+    async def get_appointment(user_id: int) -> list:
         logger.info(f"[APPOINTMENT MANAGER] get_appointments called for user_id={user_id}")
         async with db.get_connection() as conn:
             rows = await conn.fetch(
