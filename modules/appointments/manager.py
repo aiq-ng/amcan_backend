@@ -125,7 +125,6 @@ class AppointmentManager:
                 SELECT 
                     a.id AS appointment_id,
                     a.doctor_id,
-                    a.user_id,
                     a.slot_time,
                     a.status,
                     a.created_at,
@@ -133,9 +132,12 @@ class AppointmentManager:
                     d.title AS doctor_title,
                     d.bio AS doctor_bio,
                     d.rating AS doctor_rating,
-                    d.location AS doctor_location
+                    d.location AS doctor_location,
+                    u.first_name AS doctor_first_name,
+                    u.last_name AS doctor_last_name
                 FROM appointments a
                 JOIN doctors d ON a.doctor_id = d.id
+                JOIN users u ON d.user_id = u.id
                 WHERE a.user_id = $1
                 ORDER BY a.slot_time DESC
                 ''',
