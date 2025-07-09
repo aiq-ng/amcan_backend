@@ -92,8 +92,26 @@ class AppointmentManager:
                     logger.error(f"[APPOINTMENT MANAGER] Failed to book appointment for unknown reasons.")
                     raise RuntimeError("Failed to book appointment for unknown reasons.")
 
-                logger.info(f"[APPOINTMENT MANAGER] Appointment booked: {dict(row)}")
-                return dict(row)
+                # Fetch doctor details for response (including name from users table)
+                doctor_row = await conn.fetchrow(
+                    """
+                    SELECT d.id AS doctor_id, d.title AS doctor_title, d.bio AS doctor_bio, d.rating AS doctor_rating, d.location AS doctor_location,
+                           u.first_name AS doctor_first_name, u.last_name AS doctor_last_name
+                    FROM doctors d
+                    JOIN users u ON d.user_id = u.id
+                    WHERE d.id = $1
+                    """,
+                    appointment.doctor_id
+                )
+                if not doctor_row:
+                    logger.warning(f"[APPOINTMENT MANAGER] Doctor not found for response: doctor_id={appointment.doctor_id}")
+                    raise ValueError(f"Doctor not found for response: doctor_id={appointment.doctor_id}")
+
+                response = dict(row)
+                response.update(dict(doctor_row))
+
+                logger.info(f"[APPOINTMENT MANAGER] Appointment booked: {response}")
+                return response
         except Exception as exc:
             logger.exception(f"[APPOINTMENT MANAGER] Exception in book_appointment: {exc}")
             raise
