@@ -77,4 +77,36 @@ async def create_tables():
                 status VARCHAR(20) DEFAULT 'initiated' CHECK (status IN ('initiated', 'active', 'ended')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
-        """)
+            
+            CREATE TABLE IF NOT EXISTS products (
+                id VARCHAR(255) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                price INT NOT NULL, -- Stored in smallest currency unit (e.g., kobo for NGN)
+                currency VARCHAR(3) DEFAULT 'NGN',
+                image_urls TEXT[], -- Array of text for multiple image URLs
+                average_rating NUMERIC(2, 1) DEFAULT 0.0,
+                total_reviews INT DEFAULT 0,
+                category_id VARCHAR(255),
+                is_high_demand BOOLEAN DEFAULT FALSE,
+                -- Consider adding specific fields for key_benefits and specifications if they are simple text fields,
+                -- or manage them via separate join tables for more complex structures.
+                -- For this request, assume key_benefits and specifications are stored as JSONB or text arrays within the products table itself for simplicity, if needed.
+                key_benefits TEXT[],
+                specifications JSONB -- Example: [{"name": "Weight", "value": "12 lbs"}]
+            );
+
+            CREATE TABLE IF NOT EXISTS categories (
+                id VARCHAR(255) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS reviews (
+                id VARCHAR(255) PRIMARY KEY,
+                product_id VARCHAR(255) NOT NULL REFERENCES products(id),
+                user_id INT NOT NULL, -- Placeholder for actual user system
+                rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+                comment TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
