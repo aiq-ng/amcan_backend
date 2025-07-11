@@ -95,14 +95,18 @@ async def create_product_review(product_id: str, user_id: str, rating: int, comm
                 query = """
                     INSERT INTO reviews (id, product_id, user_id, rating, comment)
                     VALUES ($1, $2, $3, $4, $5)
-                    RETURNING i
+                    RETURNING id, product_id, user_id, rating, comment, created_at
                 """
-                print(f"Executing review insert query with params: {review_id}, {product_id}, {user_id}, {rating}, {comment}")
-                result = await execute_query(conn, query, (review_id, product_id, user_id, rating, comment))
-                print(f"Insert result: {result}")
-                if not result:
-                    print("Review already exists or insertion failed")
-                    raise ValueError("Review already exists or insertion failed")
+                try:
+                    print(f"Executing review insert query with params: {review_id}, {product_id}, {user_id}, {rating}, {comment}")
+                    result = await execute_query(conn, query, (review_id, product_id, user_id, rating, comment))
+                    print(f"Insert result: {result}")
+                    # if not result:
+                    #     print("Review already exists or insertion failed")
+                    #     raise ValueError("Review already exists or insertion failed")
+                except Exception as e:
+                    print(f"Exception during review insert: {e}")
+                    raise RuntimeError(f"Failed to insert review: {e}")
             except Exception as e:
                 print(f"Exception occurred while creating product review: {e}")
                 raise
