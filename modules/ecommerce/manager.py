@@ -67,7 +67,7 @@ async def get_product_reviews(product_id: str, limit: int = 5, offset: int = 0):
     async with db_connection.get_connection() as conn:
         query = """
             SELECT r.id, r.rating, r.comment, u.first_name || ' ' || u.last_name AS user_name, r.created_at
-            FROM reviews r
+            FROM product_reviews r
             JOIN users u ON r.user_id = u.id 
             WHERE r.product_id = $1 
             ORDER BY r.created_at DESC
@@ -75,11 +75,11 @@ async def get_product_reviews(product_id: str, limit: int = 5, offset: int = 0):
         """
         try:
             reviews = await fetch_all(conn, query, (product_id, limit, offset))
-            print("reviews", reviews)
+            print("product_reviews", reviews)
             return [dict(row) for row in reviews]
         except Exception as e:
             # Re-raising with a more informative message if possible
-            print(f"Error fetching reviews: {e}")
+            print(f"Error fetching product_reviews: {e}")
             raise RuntimeError(f"Error fetching reviews: {e}")
 
 async def create_product_review(product_id: str, user_id: str, rating: int, comment: str) -> str:
@@ -93,7 +93,7 @@ async def create_product_review(product_id: str, user_id: str, rating: int, comm
                 review_id = "rev_" + str(hash(f"{product_id}{user_id}{rating}{comment}"))[-8:]  # Simple ID generation
                 print(f"Generated review_id: {review_id}")
                 query = """
-                    INSERT INTO reviews (id, product_id, user_id, rating, comment)
+                    INSERT INTO product_reviews (id, product_id, user_id, rating, comment)
                     VALUES ($1, $2, $3, $4, $5)
                     RETURNING id, product_id, user_id, rating, comment, created_at
                 """
@@ -117,7 +117,7 @@ async def create_product_review(product_id: str, user_id: str, rating: int, comm
                 SET total_reviews = total_reviews + 1,
                     average_rating = (
                         SELECT COALESCE(AVG(r.rating), 0)
-                        FROM reviews r
+                        FROM product_reviews r
                         WHERE r.product_id = p.id
                     )
                 WHERE p.id = $1

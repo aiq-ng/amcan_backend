@@ -62,7 +62,7 @@ class DoctorManager:
                        COUNT(r.id) as review_count, AVG(r.rating) as avg_rating,
                        u.id as user_id, u.email as doctor_email, u.first_name as doctor_first_name, u.last_name as doctor_last_name
                 FROM doctors d
-                LEFT JOIN reviews r ON d.id = r.doctor_id
+                LEFT JOIN reviews r ON d.id = r."doctor_id"
                 LEFT JOIN users u ON d.user_id = u.id
                 GROUP BY d.id, u.id
                 ORDER BY d.created_at DESC
