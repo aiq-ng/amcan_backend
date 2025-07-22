@@ -39,8 +39,8 @@ async def create_tables():
 
             CREATE TABLE IF NOT EXISTS appointments (
                 id SERIAL PRIMARY KEY,
-                doctor_id INTEGER REFERENCES doctors(id),
-                user_id INTEGER REFERENCES users(id),
+                doctor_id INTEGER REFERENCES doctors(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                 slot_time TIMESTAMP,
                 status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -108,5 +108,24 @@ async def create_tables():
                 rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
                 comment TEXT,           
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS blog_posts (
+                id VARCHAR(255) PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                description TEXT, -- Short summary or description of the blog post
+                content_type VARCHAR(50) NOT NULL CHECK (content_type IN ('video', 'audio', 'article')),
+                content_url VARCHAR(255), -- For video/audio URLs from Cloudinary; article content stored here
+                duration INT, -- In seconds for video/audio; NULL for articles
+                mood_relevance JSONB, -- e.g., {"Happy": 0.8, "Calm": 0.5} for relevance scores
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                user_id INTEGER NOT NULL REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS mood_recommendations (
+                id VARCHAR(255) PRIMARY KEY,
+                uuser_id INTEGER NOT NULL REFERENCES users(id) UNIQUE,
+                current_mood VARCHAR(50) NOT NULL CHECK (current_mood IN ('Happy', 'Calm', 'Manic', 'Sad', 'Angry')),
+                last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
             """)

@@ -11,6 +11,7 @@ from modules.appointments.router import router as appointments_router
 from modules.chat.router import router as chat_router
 from modules.video_call.router import router as video_call_router
 from modules.ecommerce.router import router as ecommerce_router
+from modules.blog.router import router as blog_router
 
 app = FastAPI(title="Mental Health Therapy App")
 
@@ -26,6 +27,7 @@ app.include_router(appointments_router, prefix="/appointments", tags=["appointme
 app.include_router(chat_router, prefix="/chat", tags=["chat"])
 app.include_router(video_call_router, prefix="/video-call", tags=["video-call"])
 app.include_router(ecommerce_router, prefix="/ecommerce", tags=["ecommerce"])
+app.include_router(blog_router, prefix="/blog", tags=["blog"])
 
 @app.on_event("startup")
 async def startup_event():
