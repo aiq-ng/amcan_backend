@@ -124,7 +124,7 @@ async def create_tables():
 
             CREATE TABLE IF NOT EXISTS mood_recommendations (
                 id VARCHAR(255) PRIMARY KEY,
-                uuser_id INTEGER NOT NULL REFERENCES users(id) UNIQUE,
+                user_id INTEGER NOT NULL REFERENCES users(id) UNIQUE,
                 current_mood VARCHAR(50) NOT NULL CHECK (current_mood IN ('Happy', 'Calm', 'Manic', 'Sad', 'Angry')),
                 last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
