@@ -40,6 +40,16 @@ async def get_doctor(doctor_id: int):
     except Exception as e:
         return error_response(str(e), status_code=500)
 
+@router.get("/user/{user_id}")
+async def get_doctor_user_id(user_id: int):
+    try:
+        doctor = await DoctorManager.get_doctor_by_user_id(user_id)
+        if not doctor:
+            raise HTTPException(status_code=404, detail="Doctor not found")
+        return {"status": "success", "data": doctor}
+    except Exception as e:
+        return error_response(str(e), status_code=500)
+
 @router.get("/")
 async def get_all_doctors():
     try:

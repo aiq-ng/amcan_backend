@@ -110,6 +110,30 @@ class DoctorManager:
             return None
 
     @staticmethod
+    async def get_doctor_by_user_id(user_id: int) -> dict:
+        async with db.get_connection() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT d.id, d.user_id, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.availability, d.created_at,
+                       COUNT(r.id) as review_count, AVG(r.rating) as avg_rating,
+                       u.id as user_id, u.email as doctor_email, u.first_name as doctor_first_name, u.last_name as doctor_last_name
+                FROM doctors d
+                LEFT JOIN reviews r ON d.id = r.doctor_id
+                LEFT JOIN users u ON d.user_id = u.id
+                WHERE d.user_id = $1
+                GROUP BY d.id, u.id
+                """,
+                user_id
+            )
+            if row:
+                result = dict(row)
+                result["rating"] = float(result["avg_rating"]) if result["avg_rating"] else 0.0
+                del result["avg_rating"]
+                return result
+            return None
+
+    
+    @staticmethod
     async def add_review(doctor_id: int, user_id: int, rating: int, comment: str) -> dict:
         async with db.get_connection() as conn:
             row = await conn.fetchrow(
