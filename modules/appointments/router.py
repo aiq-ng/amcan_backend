@@ -71,3 +71,13 @@ async def get_appointment_by_id(appointment_id: int, current_user: dict = Depend
         return error_response(str(e), status_code=403)
     except Exception as e:
         return error_response(str(e), status_code=500)
+    
+
+@router.get("/doctor/{doctor_id}")
+async def get_doctor_appointments(doctor_id: int, current_user: dict = Depends(get_current_user)):
+    try:
+        appointments = await AppointmentManager.get_appointments_for_doctor(doctor_id)
+        print("print doctors appointment", appointments)
+        return success_response(data=appointments, message="Doctor's appointments retrieved successfully")
+    except Exception as e:
+        return error_response(str(e), status_code=500)

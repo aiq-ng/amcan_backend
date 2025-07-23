@@ -146,7 +146,30 @@ class AppointmentManager:
             logger.info(f"[APPOINTMENT MANAGER] Retrieved {len(rows)} appointments for user_id={user_id}")
             return [dict(row) for row in rows]
         
-    
+    @staticmethod
+    async def get_appointments_for_doctor(doctor_id: int) -> list:
+        logger.info(f"[APPOINTMENT MANAGER] get_appointments_for_doctor called for doctor_id={doctor_id}")
+        async with db.get_connection() as conn:
+            rows = await conn.fetch(
+                '''
+                SELECT 
+                    a.id AS appointment_id,
+                    a.doctor_id,
+                    a.user_id,
+                    a.slot_time,
+                    a.status,
+                    a.created_at,
+                    u.first_name AS patient_first_name,
+                    u.last_name AS patient_last_name
+                FROM appointments a
+                JOIN users u ON a.user_id = u.id
+                WHERE a.doctor_id = $1
+                ORDER BY a.slot_time DESC
+                ''',
+                doctor_id
+            )
+            logger.info(f"[APPOINTMENT MANAGER] Retrieved {len(rows)} appointments for doctor_id={doctor_id}")
+            return [dict(row) for row in rows]
 
     @staticmethod
     async def confirm_appointment(appointment_id: int, user_id: int) -> dict:
