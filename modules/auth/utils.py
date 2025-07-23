@@ -55,7 +55,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             logger.info(f"Fetching user from DB with email: {email}")
             user = await conn.fetchrow(
                 """
-                SELECT id, email, first_name, last_name, is_admin
+                SELECT id, email, first_name, last_name, is_admin, is_doctor
                 FROM users WHERE email = $1
                 """,
                 email
