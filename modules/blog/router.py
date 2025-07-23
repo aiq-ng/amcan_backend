@@ -7,6 +7,7 @@ from typing import List
 from asyncpg import Connection
 import json
 from modules.auth.utils import get_current_user
+from shared.response import success_response, error_response
 
 # Configure logging
 logger = logging.getLogger("blog_router")
@@ -64,7 +65,7 @@ async def create_post(
         logger.info(f"Creating blog post for user_id={user_id['id']}")
         post_id = await create_blog_post(user_id['id'], post_data)
         logger.info(f"Blog post created successfully: post_id={post_id}")
-        return post_id
+        return success_response(data=post_id, message="Blog post created successfully")
     except ValueError as e:
         logger.error(f"ValueError while creating post: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -86,7 +87,7 @@ async def get_mood_based_posts(
         if not posts:
             logger.warning(f"No posts found for user_id={user_id} and current mood")
             raise HTTPException(status_code=404, detail="No posts found for current mood")
-        return posts
+        return success_response(data=posts, message="Posts fetched successfully")
     except Exception as e:
         logger.error(f"Error fetching posts for user_id={user_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching posts: {str(e)}")
@@ -99,8 +100,9 @@ async def update_mood(
 ):
     logger.info(f"Updating mood for user_id={user_id} to {mood.current_mood}")
     try:
-        await update_user_mood(user_id, mood.current_mood)
+        response = await update_user_mood(user_id, mood.current_mood)
         logger.info(f"Mood updated successfully for user_id={user_id}")
+        return success_response(data=response, message="Mood updated successfully")
     except Exception as e:
         logger.error(f"Error updating mood for user_id={user_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error updating mood: {str(e)}")
@@ -119,7 +121,7 @@ async def get_all_posts(
         if not posts:
             logger.warning("No blog posts found")
             raise HTTPException(status_code=404, detail="No blog posts found")
-        return posts
+        return success_response(data=posts, message="All blog posts fetched successfully")
     except Exception as e:
         logger.error(f"Error fetching all blog posts: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching all blog posts: {str(e)}")

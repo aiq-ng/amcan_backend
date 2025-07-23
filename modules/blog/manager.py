@@ -57,6 +57,9 @@ async def get_blog_posts_by_mood(user_id: str, limit: int = 5, offset: int = 0):
         logger.debug(f"Executing query to fetch blog posts by mood: {query}")
         posts = await fetch_all(conn, query, (int(user_id), limit, offset))
         logger.info(f"Fetched {len(posts)} blog posts for user_id={user_id}")
+        if not posts:
+            logger.warning(f"No posts found for user_id={user_id} and current mood")
+            return []
         return [dict(post) for post in posts]
 
 async def update_user_mood(user_id: str, mood: str) -> None:
@@ -72,6 +75,7 @@ async def update_user_mood(user_id: str, mood: str) -> None:
         logger.debug(f"Executing query to update user mood: {query}")
         await execute_query(conn, query, (f"mood_{user_id}", int(user_id), mood))
         logger.info(f"Updated mood for user_id={user_id} to mood={mood}")
+        
 
 
 async def get_all_blog_posts(limit: int = 20, offset: int = 0) -> List:
