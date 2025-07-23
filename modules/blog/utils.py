@@ -67,3 +67,20 @@ async def upload_to_cloudinary(file_path: str, resource_type: str) -> str:
         return result['secure_url']
     except Exception as e:
         raise RuntimeError(f"Cloudinary upload failed: {str(e)}")
+    
+async def upload_image(image_file, folder="podcast_images"):
+
+        try:
+            # Upload the image to Cloudinary
+            response = cloudinary.uploader.upload(
+                image_file,
+                resource_type="image",  # Specify image type
+                folder="amcan_thumbnails",          # Organize in a folder
+                use_filename=True,      # Use original filename
+                unique_filename=False   # Avoid appending random strings to filename
+            )
+            return response
+        except cloudinary.exceptions.Error as e:
+            raise Exception(f"Cloudinary upload failed: {str(e)}")
+        except Exception as e:
+            raise Exception(f"Unexpected error: {str(e)}")

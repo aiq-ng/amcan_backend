@@ -8,6 +8,7 @@ from asyncpg import Connection
 import json
 from modules.auth.utils import get_current_user
 from shared.response import success_response, error_response
+from .manager import update_blog_post
 
 # Configure logging
 logger = logging.getLogger("blog_router")
@@ -19,13 +20,14 @@ async def get_db() -> Connection:
     async with db_connection() as conn:
         yield conn
 
-@router.post("/posts", response_model=str)
+@router.post("/posts")
 async def create_post(
     user_id: str = Depends(get_current_user),
     title: str = Form(...),
     description: str = Form(...),
     content_type: str = Form(...),
     content_url: str = Form(...),
+    thumbnail: UploadFile = File(None),
     duration: int = Form(None),
     mood_relevance: str = Form(...),
     file: UploadFile = File(None)
@@ -44,7 +46,8 @@ async def create_post(
         content_type=content_type,
         content_url=content_url,
         duration=duration,
-        mood_relevance=mood_relevance_data
+        mood_relevance=mood_relevance_data,
+        thumbnail=thumbnail
     )
 
     try:
@@ -125,3 +128,68 @@ async def get_all_posts(
     except Exception as e:
         logger.error(f"Error fetching all blog posts: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching all blog posts: {str(e)}")
+    
+@router.put("/posts/{post_id}")
+async def update_post(
+    post_id: str,
+    user_id: str = Depends(get_current_user),
+    title: str = Form(None),
+    description: str = Form(None),
+    content_type: str = Form(None),
+    content_url: str = Form(None),
+    thumbnail: UploadFile = File(None),
+    duration: int = Form(None),
+    mood_relevance: str = Form(None),
+    file: UploadFile = File(None)
+):
+    logger.info(f"Received update_post request: post_id={post_id}, user_id={user_id['id']}")
+    try:
+        mood_relevance_data = None
+        if mood_relevance:
+            try:
+                mood_relevance_data = json.loads(mood_relevance)
+                logger.debug(f"Parsed mood_relevance: {mood_relevance_data}")
+            except Exception as e:
+                logger.error(f"Failed to parse mood_relevance: {mood_relevance}, error: {e}")
+                raise HTTPException(status_code=400, detail="Invalid mood_relevance JSON")
+
+        update_data = {
+            "title": title,
+            "description": description,
+            "content_type": content_type,
+            "content_url": content_url,
+            "duration": duration,
+            "mood_relevance": mood_relevance_data,
+            "thumbnail": thumbnail
+        }
+
+        # Remove keys with None values
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        print("*****printing update data****", update_data)
+        if update_data.get("content_type") in ['video', 'audio']:
+            if file:
+                update_data["content_url"] = file.file
+                logger.info(f"File uploaded for {update_data['content_type']}")
+        elif update_data.get("content_type") == 'article':
+            if file:
+                logger.warning("File upload not allowed for articles")
+                raise HTTPException(status_code=400, detail="File upload not allowed for articles")
+            if content_url and not content_url.strip().startswith('<'):
+                logger.warning("Invalid HTML content for article")
+                raise HTTPException(status_code=400, detail="Invalid HTML content")
+
+        # Import here to avoid circular import
+
+        logger.info(f"Updating blog post: post_id={post_id}")
+        updated_post = await update_blog_post(post_id, user_id['id'], update_data)
+        logger.info(f"Blog post updated successfully: post_id={post_id}")
+        return success_response(data=updated_post, message="Blog post updated successfully")
+    except ValueError as e:
+        logger.error(f"ValueError while updating post: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error while updating post: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating post: {str(e)}")
+
+
+          

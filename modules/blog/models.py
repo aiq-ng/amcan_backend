@@ -1,6 +1,6 @@
 
 from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 class BlogPostCreateModel(BaseModel):
@@ -9,6 +9,7 @@ class BlogPostCreateModel(BaseModel):
     content_type: str = Field(..., pattern='^(video|audio|article)$')
     content_url: str  # Cloudinary URL for video/audio; HTML for articles
     duration: Optional[int] = None  # Seconds for video/audio; NULL for articles
+    thumbnail: Any
     mood_relevance: Dict[str, float] = Field(
         ...,
         example={"Happy": 0.8, "Calm": 0.5, "Manic": 0.2, "Sad": 0.1, "Angry": 0.0}

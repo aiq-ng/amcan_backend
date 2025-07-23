@@ -116,6 +116,7 @@ async def create_tables():
                 description TEXT, -- Short summary or description of the blog post
                 content_type VARCHAR(50) NOT NULL CHECK (content_type IN ('video', 'audio', 'article')),
                 content_url VARCHAR(255), -- For video/audio URLs from Cloudinary; article content stored here
+                thumbnail_url VARCHAR(225),
                 duration INT, -- In seconds for video/audio; NULL for articles
                 mood_relevance JSONB, -- e.g., {"Happy": 0.8, "Calm": 0.5} for relevance scores
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
