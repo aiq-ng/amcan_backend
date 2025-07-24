@@ -160,11 +160,15 @@ class AppointmentManager:
                     a.status,
                     a.created_at,
                     u.first_name AS patient_first_name,
-                    u.last_name AS patient_last_name
+                    u.last_name AS patient_last_name,
+                    u_d.first_name AS doctors_first_name,
+                    u_d.last_name AS doctors_last_name
                 FROM appointments a
                 JOIN users u ON a.user_id = u.id
+                JOIN doctors d ON a.doctor_id = d.id
+                JOIN users u_d ON d.user_id = u_d.id
                 WHERE a.doctor_id = $1
-                ORDER BY a.slot_time DESC
+                ORDER BY a.slot_time DESC;
                 ''',
                 doctor_id
             )
