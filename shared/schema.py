@@ -25,7 +25,8 @@ async def create_tables():
                 occupation VARCHAR(100),
                 emergency_contact_name VARCHAR(100),
                 emergency_contact_phone VARCHAR(20),
-                marital_status VARCHAR(20) CHECK (marital_status IN ('Single', 'Married', 'Divorced', 'Widowed'))
+                marital_status VARCHAR(20) CHECK (marital_status IN ('Single', 'Married', 'Divorced', 'Widowed')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS doctors (
