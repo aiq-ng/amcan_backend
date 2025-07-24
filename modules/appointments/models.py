@@ -5,6 +5,7 @@ from typing import Optional
 class AppointmentCreate(BaseModel):
     doctor_id: int
     slot_time: datetime
+    patient_id: int
 
     @validator("slot_time", pre=True)
     def parse_slot_time(cls, value):

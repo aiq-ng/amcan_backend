@@ -22,15 +22,13 @@ class AuthManager:
             password_hash = hash_password(user.password)
             result = await conn.fetchrow(
                 """
-                INSERT INTO users (email, password_hash, first_name, last_name, is_admin)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, email, first_name, last_name, is_admin, is_doctor
+                INSERT INTO users (email, password_hash)
+                VALUES ($1, $2)
+                RETURNING id, email
                 """,
                 user.email,
-                password_hash,
-                user.first_name,
-                user.last_name,
-                user.is_admin
+                password_hash
+               
             )
             logger.info(f"[AUTH MANAGER] User registered successfully: {user.email}")
             return dict(result)
@@ -62,7 +60,7 @@ class AuthManager:
         async with db.get_connection() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, email, first_name, last_name, is_admin, is_doctor
+                SELECT id, email, is_admin, is_doctor
                 FROM users
                 """
             )

@@ -7,8 +7,8 @@ logger = logging.getLogger(__name__)
 
 class AppointmentManager:
     @staticmethod
-    async def book_appointment(appointment: AppointmentCreate, user_id: int) -> dict:
-        logger.info(f"[APPOINTMENT MANAGER] book_appointment called for user_id={user_id}, doctor_id={appointment.doctor_id}, slot_time={appointment.slot_time}")
+    async def book_appointment(appointment: AppointmentCreate) -> dict:
+        logger.info(f"[APPOINTMENT MANAGER] book_appointment called for patient_id={appointment.patient_id}, doctor_id={appointment.doctor_id}, slot_time={appointment.slot_time}")
         try:
             async with db.get_connection() as conn:
                 # Check availability (ensure slot_time is within doctor's availability)
@@ -34,35 +34,29 @@ class AppointmentManager:
 
                 logger.debug(f"[APPOINTMENT MANAGER] Doctor availability for doctor_id={appointment.doctor_id}: {availability}")
 
-                # --- NEW: Check availability by date and 24-hour time ---
-                slot_date = appointment.slot_time.strftime("%Y-%m-%d")  # e.g., "2025-07-12"
-                slot_time = appointment.slot_time.strftime("%H:%M")     # e.g., "09:00"
+                # Check availability by date and 24-hour time
+                slot_date = appointment.slot_time.strftime("%A")  # e.g., "Thursday"
+                slot_time = appointment.slot_time.strftime("%H:%M")  # e.g., "09:00"
                 logger.debug(f"[APPOINTMENT MANAGER] Checking slot_date={slot_date}, slot_time={slot_time}")
 
-                # Find the matching day in availability
-                logger.info(f"availability db", availability)
-                logger.info(f"payload slots", slot_date)
-                day_avail = next((item for item in availability if item["day"] == slot_date), None)
+                # Find the matching day in availability (e.g., "Mon", "Tue", etc.)
+                day_avail = availability.get(slot_date[:3])  # Match first 3 letters, e.g., "thu" for "Thursday"
                 logger.debug(f"[APPOINTMENT MANAGER] day_avail for slot_date={slot_date}: {day_avail}")
-                if not day_avail:
-                    logger.warning(f"[APPOINTMENT MANAGER] No availability for date: {slot_date} (doctor_id={appointment.doctor_id})")
-                    raise ValueError(f"No availability for date: {slot_date} {availability[0]["day"]} {availability[1]["day"]} for doctor_id={appointment.doctor_id}")
-
-                logger.debug(f"[APPOINTMENT MANAGER] Available slots for {slot_date}: {day_avail.get('slots', [])}")
-                if slot_time not in day_avail.get("slots", []):
-                    logger.warning(f"[APPOINTMENT MANAGER] Slot not available: {slot_time} on {slot_date} for doctor_id={appointment.doctor_id}")
-                    raise ValueError(f"Slot not available: {slot_time} on {slot_date} for doctor_id={appointment.doctor_id}")
-                # --- END NEW ---
+                if not day_avail or slot_time not in day_avail:
+                    logger.warning(f"[APPOINTMENT MANAGER] No availability for {slot_date} at {slot_time} (doctor_id={appointment.doctor_id})")
+                    raise ValueError(f"No availability for {slot_date} at {slot_time} for doctor_id={appointment.doctor_id} available is {day_avail}")
 
                 # Check if slot is already booked
                 try:
+                    # Convert offset-aware datetime to offset-naive for comparison
+                    slot_time_naive = appointment.slot_time.replace(tzinfo=None)
                     existing = await conn.fetchrow(
                         """
                         SELECT 1 FROM appointments
                         WHERE doctor_id = $1 AND slot_time = $2
                         """,
                         appointment.doctor_id,
-                        appointment.slot_time
+                        slot_time_naive
                     )
                 except Exception as e:
                     logger.error(f"[APPOINTMENT MANAGER] Error checking existing appointment: {e}")
@@ -72,16 +66,19 @@ class AppointmentManager:
                     logger.warning(f"[APPOINTMENT MANAGER] Slot already booked: doctor_id={appointment.doctor_id}, slot_time={appointment.slot_time}")
                     raise ValueError(f"Slot already booked: doctor_id={appointment.doctor_id}, slot_time={appointment.slot_time}")
 
+                # Book the appointment
                 try:
+                    # Convert offset-aware datetime to offset-naive for insertion
+                    slot_time_naive = appointment.slot_time.replace(tzinfo=None)
                     row = await conn.fetchrow(
                         """
-                        INSERT INTO appointments (doctor_id, user_id, slot_time, status)
+                        INSERT INTO appointments (doctor_id, patient_id, slot_time, status)
                         VALUES ($1, $2, $3, $4)
-                        RETURNING id, doctor_id, user_id, slot_time, status, created_at
+                        RETURNING id, doctor_id, patient_id, slot_time, status, created_at
                         """,
                         appointment.doctor_id,
-                        user_id,
-                        appointment.slot_time,
+                        appointment.patient_id,  # Fixed to use appointment.patient_id
+                        slot_time_naive,
                         'pending'
                     )
                 except Exception as e:
@@ -92,13 +89,12 @@ class AppointmentManager:
                     logger.error(f"[APPOINTMENT MANAGER] Failed to book appointment for unknown reasons.")
                     raise RuntimeError("Failed to book appointment for unknown reasons.")
 
-                # Fetch doctor details for response (including name from users table)
+                # Fetch doctor details for response
                 doctor_row = await conn.fetchrow(
                     """
                     SELECT d.id AS doctor_id, d.title AS doctor_title, d.bio AS doctor_bio, d.rating AS doctor_rating, d.location AS doctor_location,
-                           u.first_name AS doctor_first_name, u.last_name AS doctor_last_name
+                           d.first_name AS doctor_first_name, d.last_name AS doctor_last_name
                     FROM doctors d
-                    JOIN users u ON d.user_id = u.id
                     WHERE d.id = $1
                     """,
                     appointment.doctor_id
@@ -115,10 +111,9 @@ class AppointmentManager:
         except Exception as exc:
             logger.exception(f"[APPOINTMENT MANAGER] Exception in book_appointment: {exc}")
             raise
-
     @staticmethod
-    async def get_appointment(user_id: int) -> list:
-        logger.info(f"[APPOINTMENT MANAGER] get_appointments called for user_id={user_id}")
+    async def get_patient_appointments(patient_id: int) -> list:
+        logger.info(f"[APPOINTMENT MANAGER] get_patient_appointments called for patient_id={patient_id}")
         async with db.get_connection() as conn:
             rows = await conn.fetch(
                 '''
@@ -126,24 +121,34 @@ class AppointmentManager:
                     a.id AS appointment_id,
                     a.doctor_id,
                     a.slot_time,
+                    a.complain,
                     a.status,
                     a.created_at,
                     d.id AS doctor_id,
+                    d.first_name AS doctor_first_name,
+                    d.last_name AS doctor_last_name,
                     d.title AS doctor_title,
                     d.bio AS doctor_bio,
                     d.rating AS doctor_rating,
                     d.location AS doctor_location,
-                    u.first_name AS doctor_first_name,
-                    u.last_name AS doctor_last_name
+                    d.profile_picture_url AS doctor_profile_picture_url,
+                    p.first_name AS patient_first_name,
+                    p.last_name AS patient_last_name,
+                    asumm.diagnosis,
+                    asumm.notes,
+                    asumm.prescription,
+                    asumm.follow_up_date
                 FROM appointments a
                 JOIN doctors d ON a.doctor_id = d.id
                 JOIN users u ON d.user_id = u.id
-                WHERE a.user_id = $1
+                JOIN patients p ON a.patient_id = p.user_id
+                LEFT JOIN appointments_summary asumm ON a.doctor_id = asumm.doctor_id AND a.patient_id = asumm.patient_id
+                WHERE a.patient_id = $1
                 ORDER BY a.slot_time DESC
                 ''',
-                user_id
+                int(patient_id)
             )
-            logger.info(f"[APPOINTMENT MANAGER] Retrieved {len(rows)} appointments for user_id={user_id}")
+            logger.info(f"[APPOINTMENT MANAGER] Retrieved {len(rows)} appointments for patient_id={patient_id}")
             return [dict(row) for row in rows]
         
     @staticmethod
@@ -155,18 +160,25 @@ class AppointmentManager:
                 SELECT 
                     a.id AS appointment_id,
                     a.doctor_id,
-                    a.user_id,
+                    a.patient_id,
                     a.slot_time,
+                    a.complain,
                     a.status,
                     a.created_at,
-                    u.first_name AS patient_first_name,
-                    u.last_name AS patient_last_name,
-                    u_d.first_name AS doctor_first_name,
-                    u_d.last_name AS doctor_last_name
+                    d.first_name AS doctor_first_name,
+                    d.last_name AS doctor_last_name,
+                    d.title AS doctor_title,
+                    d.location AS doctor_location,
+                    p.first_name AS patient_first_name,
+                    p.last_name AS patient_last_name,
+                    asumm.diagnosis,
+                    asumm.notes,
+                    asumm.prescription,
+                    asumm.follow_up_date
                 FROM appointments a
-                JOIN users u ON a.user_id = u.id
                 JOIN doctors d ON a.doctor_id = d.id
-                JOIN users u_d ON d.user_id = u_d.id
+                JOIN patients p ON a.patient_id = p.user_id
+                LEFT JOIN appointments_summary asumm ON a.doctor_id = asumm.doctor_id AND a.patient_id = asumm.patient_id
                 WHERE a.doctor_id = $1
                 ORDER BY a.slot_time DESC;
                 ''',
@@ -177,43 +189,49 @@ class AppointmentManager:
 
     @staticmethod
     async def confirm_appointment(appointment_id: int, doctor_id: int) -> dict:
-        logger.info(f"[APPOINTMENT MANAGER] confirm_appointment called for appointment_id={appointment_id}, user_id={doctor_id}")
-        async with db.get_connection() as conn:
-            row = await conn.fetchrow(
-                """
-                UPDATE appointments
-                SET status = 'confirmed'
-                WHERE id = $1 AND doctor_id = $2 AND status IN ('pending', 'cancelled')
-                RETURNING id, doctor_id, user_id, slot_time, status, created_at
-                """,
-                appointment_id,
-                doctor_id
-            )
-            if not row:
-                logger.warning(f"[APPOINTMENT MANAGER] Appointment not found or cannot be confirmed: appointment_id={appointment_id}, user_id={doctor_id}")
-                raise ValueError("Appointment not found or cannot be confirmed")
-            logger.info(f"[APPOINTMENT MANAGER] Appointment confirmed: {dict(row)}")
-            return dict(row)
-
+        logger.info(f"[APPOINTMENT MANAGER] confirm_appointment called for appointment_id={appointment_id}, doctor_id={doctor_id}")
+        try:
+            async with db.get_connection() as conn:
+                row = await conn.fetchrow(
+                    """
+                    UPDATE appointments
+                    SET status = 'confirmed'
+                    WHERE id = $1 AND doctor_id = $2 AND status IN ('pending', 'cancelled')
+                    """,
+                    appointment_id,
+                    doctor_id
+                )
+                
+        except Exception as e:
+            logger.error(f"[APPOINTMENT MANAGER] Error confirming appointment: {e}")
+        logger.info(f"[APPOINTMENT MANAGER] Appointment confirmed: {(row)}")
+        return {"doctor_id": doctor_id, "appointment_id": appointment_id}
+    
     @staticmethod
-    async def cancel_appointment(appointment_id: int, user_id: int) -> dict:
-        logger.info(f"[APPOINTMENT MANAGER] cancel_appointment called for appointment_id={appointment_id}, user_id={user_id}")
-        async with db.get_connection() as conn:
-            row = await conn.fetchrow(
-                """
-                UPDATE appointments
-                SET status = 'cancelled'
-                WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'confirmed')
-                RETURNING id, doctor_id, user_id, slot_time, status, created_at
-                """,
-                appointment_id,
-                user_id
-            )
-            if not row:
-                logger.warning(f"[APPOINTMENT MANAGER] Appointment not found or cannot be cancelled: appointment_id={appointment_id}, user_id={user_id}")
-                raise ValueError("Appointment not found or cannot be cancelled")
-            logger.info(f"[APPOINTMENT MANAGER] Appointment cancelled: {dict(row)}")
-            return dict(row)
+    async def cancel_appointment(appointment_id: int, doctor_id: int) -> dict:
+        logger.info(f"[APPOINTMENT MANAGER] cancel_appointment called for appointment_id={appointment_id}, doctor_id={doctor_id}")
+        
+        try:
+            async with db.get_connection() as conn:
+                row = await conn.fetchrow(
+                    """
+                    UPDATE appointments
+                    SET status = 'cancelled'
+                    WHERE id = $1 AND doctor_id = $2 AND status IN ('pending', 'confirmed')
+                    RETURNING id, doctor_id, patient_id, slot_time, status, created_at
+                    """,
+                    appointment_id,
+                    doctor_id
+                )
+                if row:
+                    return dict(row)  # return actual updated row
+                else:
+                    logger.warning(f"No appointment updated for id={appointment_id} and doctor_id={doctor_id}")
+                    return {"error": "No matching appointment found or already cancelled"}
+        except Exception as e:
+            logger.error(f"[APPOINTMENT MANAGER] Error cancelling appointment: {e}")
+            return {"error": str(e)}
+
 
     @staticmethod
     async def get_all_appointments() -> list:
@@ -224,17 +242,28 @@ class AppointmentManager:
                 SELECT 
                     a.id AS appointment_id,
                     a.doctor_id,
-                    a.user_id,
+                    a.patient_id,
                     a.slot_time,
+                    a.complain,
                     a.status,
                     a.created_at,
-                    d.id AS doctor_id,
+                    d.first_name AS doctor_first_name,
+                    d.last_name AS doctor_last_name,
                     d.title AS doctor_title,
                     d.bio AS doctor_bio,
                     d.rating AS doctor_rating,
-                    d.location AS doctor_location
+                    d.location AS doctor_location,
+                    d.profile_picture_url AS doctor_profile_picture_url,
+                    p.first_name AS patient_first_name,
+                    p.last_name AS patient_last_name,
+                    asumm.diagnosis,
+                    asumm.notes,
+                    asumm.prescription,
+                    asumm.follow_up_date
                 FROM appointments a
                 JOIN doctors d ON a.doctor_id = d.id
+                JOIN patients p ON a.patient_id = p.user_id
+                LEFT JOIN appointments_summary asumm ON a.doctor_id = asumm.doctor_id AND a.patient_id = asumm.patient_id
                 ORDER BY a.slot_time DESC
                 '''
             )

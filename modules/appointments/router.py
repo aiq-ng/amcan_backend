@@ -10,7 +10,7 @@ router = APIRouter()
 @router.post("/")
 async def book_appointment(appointment: AppointmentCreate, current_user: dict = Depends(get_current_user)):
     try:
-        appointment_data = await AppointmentManager.book_appointment(appointment, current_user["id"])
+        appointment_data = await AppointmentManager.book_appointment(appointment)
         return success_response(data=appointment_data, message="Appointment booked successfully")
     except ValueError as e:
         return error_response(str(e), status_code=400)
@@ -37,20 +37,20 @@ async def confirm_appointment(appointment_id: int, doctor_id: int, current_user:
         return error_response(str(e), status_code=500)
 
 @router.post("/{appointment_id}/cancel")
-async def cancel_appointment(appointment_id: int, current_user: dict = Depends(get_current_user)):
+async def cancel_appointment(appointment_id: int, doctor_id:int, current_user: dict = Depends(get_current_user)):
     try:
-        result = await AppointmentManager.cancel_appointment(appointment_id, current_user["id"])
+        result = await AppointmentManager.cancel_appointment(appointment_id, doctor_id)
         return success_response(data=result, message="Appointment cancelled successfully")
     except ValueError as e:
         return error_response(str(e), status_code=400)
     except Exception as e:
         return error_response(str(e), status_code=500)
 
-@router.get("/me")
-async def get_my_appointments(current_user: dict = Depends(get_current_user)):
+@router.get("/patients/{patient_id}")
+async def get_patient_appointments(patient_id, current_user: dict = Depends(get_current_user)):
     try:
-        appointments = await AppointmentManager.get_appointment(current_user["id"])
-        return {"success": True, "data": appointments, "message": "Appointments retrieved successfully"}
+        appointments = await AppointmentManager.get_patient_appointments(patient_id)
+        return {"success": True, "data": appointments, "message": "Patient appointments retrieved successfully"}
     except Exception as e:
         return {"success": False, "error": str(e), "message": "Failed to retrieve appointments"}
 

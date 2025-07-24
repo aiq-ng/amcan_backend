@@ -8,16 +8,31 @@ async def create_tables():
                 id SERIAL PRIMARY KEY,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
-                first_name VARCHAR(100),
-                last_name VARCHAR(100),
                 is_admin BOOLEAN DEFAULT FALSE,
                 is_doctor BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS patients (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                first_name VARCHAR(100),
+                last_name VARCHAR(100),
+                date_of_birth DATE,
+                address VARCHAR(255),
+                profile_image_url VARCHAR(255), -- URL to the patient's profile image
+                phone_number VARCHAR(20),
+                occupation VARCHAR(100),
+                emergency_contact_name VARCHAR(100),
+                emergency_contact_phone VARCHAR(20),
+                marital_status VARCHAR(20) CHECK (marital_status IN ('Single', 'Married', 'Divorced', 'Widowed'))
+            );
+
             CREATE TABLE IF NOT EXISTS doctors (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER REFERENCES users(id),
+                first_name VARCHAR(100),
+                last_name VARCHAR(100),
                 title VARCHAR(100),
                 bio TEXT,
                 experience_years INTEGER,
@@ -25,10 +40,22 @@ async def create_tables():
                 location VARCHAR(100),
                 rating DECIMAL(3,1) DEFAULT 0.0,
                 availability JSONB,
+                profile_picture_url VARCHAR(255), -- URL to the doctor's profile picture
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
-            CREATE TABLE IF NOT EXISTS reviews (
+            CREATE TABLE IF NOT EXISTS doctors_experience (
+                id SERIAL PRIMARY KEY,
+                doctor_id INTEGER REFERENCES doctors(id),
+                institution VARCHAR(255) NOT NULL,
+                position VARCHAR(255) NOT NULL,
+                start_date DATE NOT NULL,
+                end_date DATE,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS doctors_reviews (
                 id SERIAL PRIMARY KEY,
                 doctor_id INTEGER REFERENCES doctors(id),
                 user_id INTEGER REFERENCES users(id),
@@ -37,13 +64,33 @@ async def create_tables():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS doctors_patients (
+                id SERIAL PRIMARY KEY,
+                doctor_id INTEGER REFERENCES doctors(id),
+                patient_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS appointments (
                 id SERIAL PRIMARY KEY,
                 doctor_id INTEGER REFERENCES doctors(id) ON DELETE CASCADE,
-                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                patient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                 slot_time TIMESTAMP,
+                complain VARCHAR(255),
                 status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS appointments_summary (
+                id SERIAL PRIMARY KEY,
+                doctor_id INTEGER REFERENCES doctors(id),
+                patient_id INTEGER REFERENCES users(id),
+                diagnosis TEXT,
+                notes TEXT,
+                prescription TEXT,
+                follow_up_date TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS chat_messages (
@@ -66,7 +113,7 @@ async def create_tables():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_by INTEGER REFERENCES users(id)
             );
-                           
+                        
             CREATE TABLE IF NOT EXISTS video_calls (
                 id SERIAL PRIMARY KEY,
                 appointment_id INTEGER REFERENCES appointments(id),
@@ -77,9 +124,9 @@ async def create_tables():
                 status VARCHAR(20) DEFAULT 'initiated' CHECK (status IN ('initiated', 'active', 'ended')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
-            
+
             CREATE TABLE IF NOT EXISTS products (
-                id VARCHAR(255) PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
                 description TEXT,
                 price INT NOT NULL, -- Stored in smallest currency unit (e.g., kobo for NGN)
@@ -87,7 +134,7 @@ async def create_tables():
                 image_urls TEXT[], -- Array of text for multiple image URLs
                 average_rating NUMERIC(2, 1) DEFAULT 0.0,
                 total_reviews INT DEFAULT 0,
-                category_id VARCHAR(255),
+                category_id INTEGER,
                 is_high_demand BOOLEAN DEFAULT FALSE,
                 -- Consider adding specific fields for key_benefits and specifications if they are simple text fields,
                 -- or manage them via separate join tables for more complex structures.
@@ -97,22 +144,23 @@ async def create_tables():
             );
 
             CREATE TABLE IF NOT EXISTS categories (
-                id VARCHAR(255) PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL UNIQUE
             );
 
             CREATE TABLE IF NOT EXISTS product_reviews (
                 id VARCHAR(255) PRIMARY KEY,
-                product_id VARCHAR(255) NOT NULL REFERENCES products(id),
-                user_id INT NOT NULL, -- Placeholder for actual user system
-                rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+                product_id INTEGER NOT NULL REFERENCES products(id),
+                user_id INTEGER NOT NULL, -- Placeholder for actual user system
+                rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
                 comment TEXT,           
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS blog_posts (
-                id VARCHAR(255) PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
+                category_id INTEGER REFERENCES categories(id), -- Assuming categories table exists
                 description TEXT, -- Short summary or description of the blog post
                 content_type VARCHAR(50) NOT NULL CHECK (content_type IN ('video', 'audio', 'article')),
                 content_url VARCHAR(255), -- For video/audio URLs from Cloudinary; article content stored here
@@ -124,7 +172,7 @@ async def create_tables():
             );
 
             CREATE TABLE IF NOT EXISTS mood_recommendations (
-                id VARCHAR(255) PRIMARY KEY,
+                id INTEGER PRIMARY KEY,
                 user_id INTEGER NOT NULL REFERENCES users(id) UNIQUE,
                 current_mood VARCHAR(50) NOT NULL CHECK (current_mood IN ('Happy', 'Calm', 'Manic', 'Sad', 'Angry')),
                 last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
