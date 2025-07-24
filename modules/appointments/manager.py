@@ -161,8 +161,8 @@ class AppointmentManager:
                     a.created_at,
                     u.first_name AS patient_first_name,
                     u.last_name AS patient_last_name,
-                    u_d.first_name AS doctors_first_name,
-                    u_d.last_name AS doctors_last_name
+                    u_d.first_name AS doctor_first_name,
+                    u_d.last_name AS doctor_last_name
                 FROM appointments a
                 JOIN users u ON a.user_id = u.id
                 JOIN doctors d ON a.doctor_id = d.id
