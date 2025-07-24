@@ -172,21 +172,21 @@ class AppointmentManager:
             return [dict(row) for row in rows]
 
     @staticmethod
-    async def confirm_appointment(appointment_id: int, user_id: int) -> dict:
-        logger.info(f"[APPOINTMENT MANAGER] confirm_appointment called for appointment_id={appointment_id}, user_id={user_id}")
+    async def confirm_appointment(appointment_id: int, doctor_id: int) -> dict:
+        logger.info(f"[APPOINTMENT MANAGER] confirm_appointment called for appointment_id={appointment_id}, user_id={doctor_id}")
         async with db.get_connection() as conn:
             row = await conn.fetchrow(
                 """
                 UPDATE appointments
                 SET status = 'confirmed'
-                WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'cancelled')
+                WHERE id = $1 AND doctor_id = $2 AND status IN ('pending', 'cancelled')
                 RETURNING id, doctor_id, user_id, slot_time, status, created_at
                 """,
                 appointment_id,
-                user_id
+                doctor_id
             )
             if not row:
-                logger.warning(f"[APPOINTMENT MANAGER] Appointment not found or cannot be confirmed: appointment_id={appointment_id}, user_id={user_id}")
+                logger.warning(f"[APPOINTMENT MANAGER] Appointment not found or cannot be confirmed: appointment_id={appointment_id}, user_id={doctor_id}")
                 raise ValueError("Appointment not found or cannot be confirmed")
             logger.info(f"[APPOINTMENT MANAGER] Appointment confirmed: {dict(row)}")
             return dict(row)

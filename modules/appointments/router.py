@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from .models import AppointmentCreate, AppointmentResponse
 from .manager import AppointmentManager
-from modules.auth.utils import get_current_user, get_current_admin
+from modules.auth.utils import get_current_user, get_current_admin, get_current_doctor
 from shared.response import success_response, error_response
 from typing import List
 
@@ -27,9 +27,9 @@ async def get_appointments(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/{appointment_id}/confirm")
-async def confirm_appointment(appointment_id: int, current_user: dict = Depends(get_current_user)):
+async def confirm_appointment(appointment_id: int, doctor_id: int, current_user: dict = Depends(get_current_doctor)):
     try:
-        result = await AppointmentManager.confirm_appointment(appointment_id, current_user["id"])
+        result = await AppointmentManager.confirm_appointment(appointment_id, doctor_id)
         return success_response(data=result, message="Appointment confirmed successfully")
     except ValueError as e:
         return error_response(str(e), status_code=400)

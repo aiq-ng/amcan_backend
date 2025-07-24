@@ -83,6 +83,15 @@ async def get_current_admin(current_user: dict = Depends(get_current_user)) -> d
     logger.debug("Exiting get_current_admin successfully")
     return current_user
 
+async def get_current_doctor(current_user: dict = Depends(get_current_user)) -> dict:
+    logger.info(f"Entered get_current_admin with user: {current_user}")
+    if not current_user["is_doctor"]:
+        logger.warning(f"User {current_user['email']} is not doctor")
+        raise HTTPException(status_code=403, detail="Doctor access required")
+    logger.info(f"User {current_user['email']} is doctor")
+    logger.debug("Exiting get_current_admin successfully")
+    return current_user
+
 async def get_current_user_ws(websocket: WebSocket) -> dict:
     print('websockets', websocket)
     token = websocket.query_params.get("token")
