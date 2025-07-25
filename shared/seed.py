@@ -82,7 +82,8 @@ async def seed_data():
                     RETURNING id
                     """,
                     doctor_user_id, fname, lname, title, f"A {title.lower()} with {exp} years of experience.", exp, patients_count, loc,
-                    f'{{"Mon": ["08:00", "18:00"], "Tue": ["08:00", "18:00"]}}', pic_url
+                    '{"date": "2025-07-25", "time": "14:30"}',
+                    pic_url
                 )
                 doctors.append(doctor_id)
                 logger.info(f"Doctor {fname} {lname} created with id: {doctor_id}")

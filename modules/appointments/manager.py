@@ -34,17 +34,18 @@ class AppointmentManager:
 
                 logger.debug(f"[APPOINTMENT MANAGER] Doctor availability for doctor_id={appointment.doctor_id}: {availability}")
 
-                # Check availability by date and 24-hour time
-                slot_date = appointment.slot_time.strftime("%A")  # e.g., "Thursday"
-                slot_time = appointment.slot_time.strftime("%H:%M")  # e.g., "09:00"
+                # Check availability by date and time
+                slot_date = appointment.slot_time.date().isoformat()  # e.g., "2025-07-25"
+                slot_time = appointment.slot_time.time().strftime("%H:%M")  # e.g., "14:30"
                 logger.debug(f"[APPOINTMENT MANAGER] Checking slot_date={slot_date}, slot_time={slot_time}")
 
-                # Find the matching day in availability (e.g., "Mon", "Tue", etc.)
-                day_avail = availability.get(slot_date[:3])  # Match first 3 letters, e.g., "thu" for "Thursday"
-                logger.debug(f"[APPOINTMENT MANAGER] day_avail for slot_date={slot_date}: {day_avail}")
-                if not day_avail or slot_time not in day_avail:
+                # Compare with availability date and time
+                avail_date = availability.get("date")
+                avail_time = availability.get("time")
+                logger.debug(f"[APPOINTMENT MANAGER] Availability date={avail_date}, time={avail_time}")
+                if not avail_date or not avail_time or slot_date != avail_date or slot_time != avail_time:
                     logger.warning(f"[APPOINTMENT MANAGER] No availability for {slot_date} at {slot_time} (doctor_id={appointment.doctor_id})")
-                    raise ValueError(f"No availability for {slot_date} at {slot_time} for doctor_id={appointment.doctor_id} available is {day_avail}")
+                    raise ValueError(f"No availability for {slot_date} at {slot_time} for doctor_id={appointment.doctor_id}, available is {avail_date} at {avail_time}")
 
                 # Check if slot is already booked
                 try:
@@ -77,7 +78,7 @@ class AppointmentManager:
                         RETURNING id, doctor_id, patient_id, slot_time, status, created_at
                         """,
                         appointment.doctor_id,
-                        appointment.patient_id,  # Fixed to use appointment.patient_id
+                        appointment.patient_id,
                         slot_time_naive,
                         'pending'
                     )
@@ -93,7 +94,7 @@ class AppointmentManager:
                 doctor_row = await conn.fetchrow(
                     """
                     SELECT d.id AS doctor_id, d.title AS doctor_title, d.bio AS doctor_bio, d.rating AS doctor_rating, d.location AS doctor_location,
-                           d.first_name AS doctor_first_name, d.last_name AS doctor_last_name
+                        d.first_name AS doctor_first_name, d.last_name AS doctor_last_name
                     FROM doctors d
                     WHERE d.id = $1
                     """,
