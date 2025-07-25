@@ -7,13 +7,13 @@ class PatientCreate(BaseModel):
     password: str
     first_name: str
     last_name: str
-    date_of_birth: datetime
+    date_of_birth: Optional[datetime]
     address: str
-    phone_number: str
-    occupation: str
-    emergency_contact_name: str
-    emergency_contact_phone: str
-    marital_status: str
+    phone_number: Optional[str]
+    occupation: Optional[str]
+    emergency_contact_name: Optional[str]
+    emergency_contact_phone: Optional[str]
+    marital_status: Optional[str]
     user_id: Any
 
     class Config:
