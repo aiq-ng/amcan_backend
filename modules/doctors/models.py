@@ -10,9 +10,11 @@ class DoctorCreate(BaseModel):
     title: str
     bio: str
     experience_years: int
+    first_name: str
+    last_name: str
     patients_count: int
+    profile_picture_url: str
     location: str
-    availability: List[Availability]
 
 class DoctorResponse(BaseModel):
     id: int

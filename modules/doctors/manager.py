@@ -1,6 +1,5 @@
 from .models import DoctorCreate, DoctorResponse
 from shared.db import db
-import json
 from datetime import datetime
 
 class DoctorManager:
@@ -10,30 +9,32 @@ class DoctorManager:
         print('creating doctor hit')
 
         async with db.get_connection() as conn:
-            # Assuming you have a doctors table and are inserting/fetching data
+            # Insert into doctors table
             row = await conn.fetchrow(
                 """
-                INSERT INTO doctors (title, bio, experience_years, patients_count, location, user_id, availability)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, title, bio, experience_years, patients_count, location, created_at, user_id, availability
+                INSERT INTO doctors (user_id, first_name, last_name, title, bio, experience_years, patients_count, location, profile_picture_url)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                RETURNING id, user_id, first_name, last_name, title, bio, experience_years, patients_count, location, rating, profile_picture_url, created_at
                 """,
+                user_id,
+                doctor_item.first_name,
+                doctor_item.last_name,
                 doctor_item.title,
                 doctor_item.bio,
                 doctor_item.experience_years,
                 doctor_item.patients_count,
                 doctor_item.location,
-                doctor_item.user_id,
-                json.dumps([{"day": slot.day, "slots": slot.slots} for slot in doctor_item.availability]) # Convert Availability to list of dicts
+                doctor_item.profile_picture_url
             )
 
-            # Update the user to set is_doctor = TRUE for the given user_id
+            # Update the user to set is_doctor = TRUE
             await conn.execute(
                 """
                 UPDATE users
                 SET is_doctor = TRUE
                 WHERE id = $1
                 """,
-                doctor_item.user_id
+                user_id
             )
 
             result = dict(row)
@@ -42,24 +43,17 @@ class DoctorManager:
             # Convert datetime objects to ISO format strings
             if 'created_at' in result and isinstance(result['created_at'], datetime):
                 result['created_at'] = result['created_at'].isoformat()
-            # Add similar conversions for any other datetime fields like 'updated_at', 'dob', etc.
-            # if 'dob' in result and isinstance(result['dob'], datetime):
-            #     result['dob'] = result['dob'].isoformat()
-
-            # If availability is stored as JSONB in DB, it might come back as a Python list/dict, no need to dump again
-            # If it's text, you might need to json.loads it here if you didn't do it during fetch
-            if 'availability' in result and isinstance(result['availability'], str):
-                 result['availability'] = json.loads(result['availability'])
-
 
             return result
 
+    @staticmethod
     async def get_doctors(limit: int = 10, offset: int = 0) -> list:
         async with db.get_connection() as conn:
             rows = await conn.fetch(
                 """
                 SELECT 
                     d.id AS doctor_id,
+                    d.user_id,
                     d.first_name,
                     d.last_name,
                     d.title,
@@ -67,7 +61,6 @@ class DoctorManager:
                     d.experience_years,
                     d.patients_count,
                     d.location,
-                    d.availability,
                     d.rating,
                     d.profile_picture_url,
                     d.created_at,
@@ -100,10 +93,22 @@ class DoctorManager:
                         WHERE de.doctor_id = d.id
                     ) AS experiences,
                     (
+                        SELECT JSONB_AGG(
+                            JSONB_BUILD_OBJECT(
+                                'slot_id', das.id,
+                                'available_at', das.available_at,
+                                'status', das.status,
+                                'created_at', das.created_at
+                            )
+                        )
+                        FROM doctor_availability_slots das 
+                        WHERE das.doctor_id = d.id
+                    ) AS availability_slots,
+                    (
                         SELECT COUNT(*) 
                         FROM appointments a 
                         WHERE a.doctor_id = d.id 
-                        AND DATE(a.slot_time) = DATE('2025-07-24')
+                        AND DATE(a.slot_time) = CURRENT_DATE
                     ) AS appointment_count_today,
                     (
                         SELECT COUNT(DISTINCT dp.patient_id) 
@@ -120,12 +125,12 @@ class DoctorManager:
                         )
                     ) FILTER (WHERE a.id IS NOT NULL) AS appointments_today
                 FROM doctors d
-                LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = DATE('2025-07-24')
+                LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = CURRENT_DATE
                 LEFT JOIN doctors_reviews dr ON d.id = dr.doctor_id
                 LEFT JOIN doctors_experience de ON d.id = de.doctor_id
                 LEFT JOIN doctors_patients dp ON d.id = dp.doctor_id
-                GROUP BY d.id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
-                LIMIT $1 OFFSET $2;
+                GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
+                LIMIT $1 OFFSET $2
                 """,
                 limit,
                 offset
@@ -134,6 +139,55 @@ class DoctorManager:
                 return []
             else:
                 result = [dict(row) for row in rows]
+                # for item in result:
+                #     # Convert datetime objects to ISO format strings
+                #     if 'created_at' in item and isinstance(item['created_at'], datetime):
+                #         item['created_at'] = item['created_at'].isoformat()
+                #     # Safely handle reviews
+                #     if item['reviews']:
+                #         new_reviews = []
+                #         for review in item['reviews']:
+                #             review = dict(review)
+                #             if 'created_at' in review and isinstance(review['created_at'], datetime):
+                #                 review['created_at'] = review['created_at'].isoformat()
+                #             new_reviews.append(review)
+                #         item['reviews'] = new_reviews
+                #     # Safely handle experiences
+                #     if item['experiences']:
+                #         new_experiences = []
+                #         for exp in item['experiences']:
+                #             exp = dict(exp)
+                #             if 'start_date' in exp and isinstance(exp['start_date'], datetime):
+                #                 exp['start_date'] = exp['start_date'].isoformat()
+                #             if 'end_date' in exp:
+                #                 if exp['end_date'] is not None and isinstance(exp['end_date'], datetime):
+                #                     exp['end_date'] = exp['end_date'].isoformat()
+                #                 elif exp['end_date'] is not None and not isinstance(exp['end_date'], str):
+                #                     exp['end_date'] = str(exp['end_date'])
+                #             if 'created_at' in exp and isinstance(exp['created_at'], datetime):
+                #                 exp['created_at'] = exp['created_at'].isoformat()
+                #             new_experiences.append(exp)
+                #         item['experiences'] = new_experiences
+                #     # Safely handle availability_slots
+                #     if item['availability_slots']:
+                #         new_slots = []
+                #         for slot in item['availability_slots']:
+                #             slot = dict(slot)
+                #             if 'available_at' in slot and isinstance(slot['available_at'], datetime):
+                #                 slot['available_at'] = slot['available_at'].isoformat()
+                #             if 'created_at' in slot and isinstance(slot['created_at'], datetime):
+                #                 slot['created_at'] = slot['created_at'].isoformat()
+                #             new_slots.append(slot)
+                #         item['availability_slots'] = new_slots
+                #     # Safely handle appointments_today
+                #     if item['appointments_today']:
+                #         new_appts = []
+                #         for appt in item['appointments_today']:
+                #             appt = dict(appt)
+                #             if 'slot_time' in appt and isinstance(appt['slot_time'], datetime):
+                #                 appt['slot_time'] = appt['slot_time'].isoformat()
+                #             new_appts.append(appt)
+                #         item['appointments_today'] = new_appts
                 return result
 
     @staticmethod
@@ -143,10 +197,10 @@ class DoctorManager:
                 """
                 SELECT 
                     d.id AS doctor_id,
+                    d.user_id,
                     d.first_name,
                     d.last_name,
                     d.title,
-                    d.availability,
                     d.bio,
                     d.experience_years,
                     d.patients_count,
@@ -183,10 +237,22 @@ class DoctorManager:
                         WHERE de.doctor_id = d.id
                     ) AS experiences,
                     (
+                        SELECT JSONB_AGG(
+                            JSONB_BUILD_OBJECT(
+                                'slot_id', das.id,
+                                'available_at', das.available_at,
+                                'status', das.status,
+                                'created_at', das.created_at
+                            )
+                        )
+                        FROM doctor_availability_slots das 
+                        WHERE das.doctor_id = d.id
+                    ) AS availability_slots,
+                    (
                         SELECT COUNT(*) 
                         FROM appointments a 
                         WHERE a.doctor_id = d.id 
-                        AND DATE(a.slot_time) = DATE('2025-07-24')
+                        AND DATE(a.slot_time) = CURRENT_DATE
                     ) AS appointment_count_today,
                     (
                         SELECT COUNT(DISTINCT dp.patient_id) 
@@ -203,24 +269,40 @@ class DoctorManager:
                         )
                     ) FILTER (WHERE a.id IS NOT NULL) AS appointments_today
                 FROM doctors d
-                LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = DATE('2025-07-24')
+                LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = CURRENT_DATE
                 LEFT JOIN doctors_reviews dr ON d.id = dr.doctor_id
                 LEFT JOIN doctors_experience de ON d.id = de.doctor_id
                 LEFT JOIN doctors_patients dp ON d.id = dp.doctor_id
                 WHERE d.id = $1
-                GROUP BY d.id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
+                GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
                 """,
                 doctor_id
             )
             if row:
                 result = dict(row)
                 # Convert datetime objects to ISO format strings
-                if 'created_at' in result and isinstance(result['created_at'], datetime):
-                    result['created_at'] = result['created_at'].isoformat()
-                # If availability is stored as JSONB in DB, it might come back as a Python list/dict, no need to dump again
-                # If it's text, you might need to json.loads it here if you didn't do it during fetch
-                if 'availability' in result and isinstance(result['availability'], str):
-                    result['availability'] = json.loads(result['availability'])
+                # if 'created_at' in result and isinstance(result['created_at'], datetime):
+                #     result['created_at'] = result['created_at'].isoformat()
+                # if result['reviews']:
+                #     result['reviews'] = [
+                #         {**review, 'created_at': review['created_at'].isoformat()}
+                #         for review in result['reviews']
+                #     ]
+                # if result['experiences']:
+                #     result['experiences'] = [
+                #         {**exp, 'start_date': exp['start_date'].isoformat(), 'end_date': exp['end_date'].isoformat() if exp['end_date'] else None, 'created_at': exp['created_at'].isoformat()}
+                #         for exp in result['experiences']
+                #     ]
+                # if result['availability_slots']:
+                #     result['availability_slots'] = [
+                #         {**slot, 'available_at': slot['available_at'].isoformat(), 'created_at': slot['created_at'].isoformat()}
+                #         for slot in result['availability_slots']
+                #     ]
+                # if result['appointments_today']:
+                #     result['appointments_today'] = [
+                #         {**appt, 'slot_time': appt['slot_time'].isoformat()}
+                #         for appt in result['appointments_today']
+                #     ]
                 return result
             return None
 
@@ -230,10 +312,9 @@ class DoctorManager:
                 """
                 SELECT 
                     d.id AS doctor_id,
+                    d.user_id,
                     d.first_name,
                     d.last_name,
-                    d.user_id,
-                    d.availability,
                     d.title,
                     d.bio,
                     d.experience_years,
@@ -271,10 +352,22 @@ class DoctorManager:
                         WHERE de.doctor_id = d.id
                     ) AS experiences,
                     (
+                        SELECT JSONB_AGG(
+                            JSONB_BUILD_OBJECT(
+                                'slot_id', das.id,
+                                'available_at', das.available_at,
+                                'status', das.status,
+                                'created_at', das.created_at
+                            )
+                        )
+                        FROM doctor_availability_slots das 
+                        WHERE das.doctor_id = d.id
+                    ) AS availability_slots,
+                    (
                         SELECT COUNT(*) 
                         FROM appointments a 
                         WHERE a.doctor_id = d.id 
-                        AND DATE(a.slot_time) = DATE('2025-07-24')
+                        AND DATE(a.slot_time) = CURRENT_DATE
                     ) AS appointment_count_today,
                     (
                         SELECT COUNT(DISTINCT dp.patient_id) 
@@ -291,28 +384,43 @@ class DoctorManager:
                         )
                     ) FILTER (WHERE a.id IS NOT NULL) AS appointments_today
                 FROM doctors d
-                LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = DATE('2025-07-24')
+                LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = CURRENT_DATE
                 LEFT JOIN doctors_reviews dr ON d.id = dr.doctor_id
                 LEFT JOIN doctors_experience de ON d.id = de.doctor_id
                 LEFT JOIN doctors_patients dp ON d.id = dp.doctor_id
                 WHERE d.user_id = $1
-                GROUP BY d.id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
+                GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
                 """,
                 user_id
             )
             if row:
                 result = dict(row)
-                # Convert datetime objects to ISO format strings
-                if 'created_at' in result and isinstance(result['created_at'], datetime):
-                    result['created_at'] = result['created_at'].isoformat()
-                # If availability is stored as JSONB in DB, it might come back as a Python list/dict, no need to dump again
-                # If it's text, you might need to json.loads it here if you didn't do it during fetch
-                if 'availability' in result and isinstance(result['availability'], str):
-                    result['availability'] = json.loads(result['availability'])
+                # # Convert datetime objects to ISO format strings
+                # if 'created_at' in result and isinstance(result['created_at'], datetime):
+                #     result['created_at'] = result['created_at'].isoformat()
+                # if result['reviews']:
+                #     result['reviews'] = [
+                #         {**review, 'created_at': review['created_at'].isoformat()}
+                #         for review in result['reviews']
+                #     ]
+                # if result['experiences']:
+                #     result['experiences'] = [
+                #         {**exp, 'start_date': exp['start_date'].isoformat(), 'end_date': exp['end_date'].isoformat() if exp['end_date'] else None, 'created_at': exp['created_at'].isoformat()}
+                #         for exp in result['experiences']
+                #     ]
+                # if result['availability_slots']:
+                #     result['availability_slots'] = [
+                #         {**slot, 'available_at': slot['available_at'].isoformat(), 'created_at': slot['created_at'].isoformat()}
+                #         for slot in result['availability_slots']
+                #     ]
+                # if result['appointments_today']:
+                #     result['appointments_today'] = [
+                #         {**appt, 'slot_time': appt['slot_time'].isoformat()}
+                #         for appt in result['appointments_today']
+                #     ]
                 return result
             return None
 
-    
     @staticmethod
     async def add_review(doctor_id: int, user_id: int, rating: int, comment: str) -> dict:
         async with db.get_connection() as conn:
@@ -327,6 +435,9 @@ class DoctorManager:
                 rating,
                 comment
             )
-            return dict(row)
-
-
+            if row:
+                result = dict(row)
+                if 'created_at' in result and isinstance(result['created_at'], datetime):
+                    result['created_at'] = result['created_at'].isoformat()
+                return result
+            return None

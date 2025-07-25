@@ -5,6 +5,7 @@ from typing import Optional
 class AppointmentCreate(BaseModel):
     doctor_id: int
     slot_time: datetime
+    complain: str
     patient_id: int
 
     @validator("slot_time", pre=True)

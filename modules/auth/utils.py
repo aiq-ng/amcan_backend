@@ -69,6 +69,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                 SELECT 
                     u.id AS id,
                     u.email,
+                    u.is_admin,
+                    u.is_doctor,
                     p.first_name,
                     p.last_name,
                     p.date_of_birth,
@@ -96,7 +98,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                 raise HTTPException(status_code=404, detail="User not found")
             if patient is None:
                 logger.warning(f"Patient not found for user_id: {user['id']}")
-                raise HTTPException(status_code=404, detail="user patient data not found")
+                return dict(user)
             logger.info(f"User found: {dict(user)}")
             logger.debug("Exiting get_current_user successfully")
             return dict(patient)

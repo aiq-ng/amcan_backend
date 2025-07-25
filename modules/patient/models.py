@@ -14,6 +14,9 @@ class PatientCreate(BaseModel):
     emergency_contact_name: Optional[str]
     emergency_contact_phone: Optional[str]
     marital_status: Optional[str]
+    therapy_type: Optional[int]
+    therapy_criticality: Optional[str]
+    profile_image_url: Optional[str]
     user_id: Any
 
     class Config:
