@@ -30,7 +30,18 @@ class AuthManager:
                 password_hash
                
             )
-            logger.info(f"[AUTH MANAGER] User registered successfully: {user.email}")
+
+            patient_id = await conn.fetchval(
+            """
+            INSERT INTO patients (user_id, first_name, last_name, address,
+                                 marital_status)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+            """,
+            result['id'], user.first_name, user.last_name,
+            user.address,  user.marital_status
+        )
+            logger.info(f"[AUTH MANAGER] User registered and patient created successfully: {user.email}")     
             return dict(result)
 
     @staticmethod

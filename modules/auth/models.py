@@ -4,6 +4,13 @@ from typing import Optional
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    is_admin: Optional[bool] = False
+    is_doctor: Optional[bool] = False
+    address: Optional[str] = None
+    marital_status: Optional[str] = None
+
 
     @validator("password")
     def validate_password(cls, v):
