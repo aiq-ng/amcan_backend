@@ -61,12 +61,45 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                 email
             )
             logger.debug(f"DB fetch result: {user}")
+
+            user = dict(user)
+
+            patient = await conn.fetchrow(
+                """
+                SELECT 
+                    u.id AS id,
+                    u.email,
+                    p.first_name,
+                    p.last_name,
+                    p.date_of_birth,
+                    p.address,
+                    p.profile_image_url,
+                    p.phone_number,
+                    p.occupation,
+                    t.therapy_type,
+                    p.therapy_criticality,
+                    p.emergency_contact_name,
+                    p.emergency_contact_phone,
+                    p.marital_status,
+                    p.created_at
+                FROM 
+                    users u
+                    INNER JOIN patients p ON u.id = p.user_id
+                    LEFT JOIN therapy t ON p.therapy_type = t.id
+                WHERE 
+                    u.id = $1;
+                """,
+                user['id']
+            )
             if user is None:
                 logger.warning(f"User not found for email: {email}")
                 raise HTTPException(status_code=404, detail="User not found")
+            if patient is None:
+                logger.warning(f"Patient not found for user_id: {user['id']}")
+                raise HTTPException(status_code=404, detail="user patient data not found")
             logger.info(f"User found: {dict(user)}")
             logger.debug("Exiting get_current_user successfully")
-            return dict(user)
+            return dict(patient)
     except jwt.PyJWTError as e:
         logger.error(f"JWT decode error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")

@@ -1,8 +1,8 @@
-
 from shared.db import db
 from modules.auth.utils import hash_password
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import logging
+from random import randint, choice
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,6 +13,22 @@ async def seed_data():
         count = await conn.fetchval("SELECT COUNT(*) FROM users")
         if count == 0:
             logger.info("No users found. Seeding data...")
+
+            # Seed therapy types
+            logger.info("Seeding therapy types...")
+            therapy_types = ["Psychotherapy", "Physical Therapy", "Occupational Therapy", "Speech Therapy"]
+            therapy_ids = []
+            for therapy_type in therapy_types:
+                therapy_id = await conn.fetchval(
+                    """
+                    INSERT INTO therapy (therapy_type)
+                    VALUES ($1)
+                    RETURNING id
+                    """,
+                    therapy_type
+                )
+                therapy_ids.append(therapy_id)
+                logger.info(f"Therapy type {therapy_type} created with id: {therapy_id}")
 
             # Seed admin user
             logger.info("Seeding admin user...")
@@ -31,13 +47,13 @@ async def seed_data():
             logger.info("Seeding patients...")
             patients = []
             patient_data = [
-                ("patient1@therapyapp.com", "Patient123!", "Jane", "Doe", date(1990, 5, 15), '123 Main St, Kaduna', '+2348012345678', 'Teacher', 'John Doe', '+2348098765432', 'Single'),
-                ("patient2@therapyapp.com", "Patient456!", "Ali", "Bello", date(1985, 9, 22), '456 Lagos Rd, Lagos', '+2348076543210', 'Engineer', 'Fatima Bello', '+2348081234567', 'Married'),
-                ("patient3@therapyapp.com", "Patient789!", "Amina", "Sani", date(1995, 3, 10), '789 Kano St, Kano', '+2348065432109', 'Nurse', 'Hassan Sani', '+2348054321098', 'Single'),
-                ("patient4@therapyapp.com", "Patient101!", "Chika", "Okonkwo", date(1988, 12, 5), '321 Enugu Ave, Enugu', '+2348043210987', 'Accountant', 'Ngozi Okonkwo', '+2348032109876', 'Married'),
-                ("patient5@therapyapp.com", "Patient112!", "Tunde", "Adewale", date(1992, 7, 18), '654 Ibadan Rd, Ibadan', '+2348021098765', 'Driver', 'Bisi Adewale', '+2348010987654', 'Divorced'),
+                ("patient1@therapyapp.com", "Patient123!", "Jane", "Doe", date(1990, 5, 15), '123 Main St, Kaduna', '+2348012345678', 'Teacher', therapy_ids[0], 'High', 'John Doe', '+2348098765432', 'Single'),
+                ("patient2@therapyapp.com", "Patient456!", "Ali", "Bello", date(1985, 9, 22), '456 Lagos Rd, Lagos', '+2348076543210', 'Engineer', therapy_ids[1], 'Medium', 'Fatima Bello', '+2348081234567', 'Married'),
+                ("patient3@therapyapp.com", "Patient789!", "Amina", "Sani", date(1995, 3, 10), '789 Kano St, Kano', '+2348065432109', 'Nurse', therapy_ids[2], 'Low', 'Hassan Sani', '+2348054321098', 'Single'),
+                ("patient4@therapyapp.com", "Patient101!", "Chika", "Okonkwo", date(1988, 12, 5), '321 Enugu Ave, Enugu', '+2348043210987', 'Accountant', therapy_ids[3], 'Medium', 'Ngozi Okonkwo', '+2348032109876', 'Married'),
+                ("patient5@therapyapp.com", "Patient112!", "Tunde", "Adewale", date(1992, 7, 18), '654 Ibadan Rd, Ibadan', '+2348021098765', 'Driver', therapy_ids[0], 'High', 'Bisi Adewale', '+2348010987654', 'Divorced'),
             ]
-            for email, pwd, fname, lname, dob, addr, phone, occ, ec_name, ec_phone, ms in patient_data:
+            for email, pwd, fname, lname, dob, addr, phone, occ, therapy_id, criticality, ec_name, ec_phone, ms in patient_data:
                 patient_id = await conn.fetchval(
                     """
                     INSERT INTO users (email, password_hash)
@@ -48,15 +64,15 @@ async def seed_data():
                 )
                 await conn.execute(
                     """
-                    INSERT INTO patients (user_id, first_name, last_name, date_of_birth, address, profile_image_url, phone_number, occupation, emergency_contact_name, emergency_contact_phone, marital_status)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    INSERT INTO patients (user_id, first_name, last_name, date_of_birth, address, profile_image_url, phone_number, occupation, therapy_type, therapy_criticality, emergency_contact_name, emergency_contact_phone, marital_status)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                     """,
-                    patient_id, fname, lname, dob, addr, f'https://example.com/patient{patient_id}.jpg', phone, occ, ec_name, ec_phone, ms
+                    patient_id, fname, lname, dob, addr, f'https://example.com/patient{patient_id}.jpg', phone, occ, therapy_id, criticality, ec_name, ec_phone, ms
                 )
                 patients.append(patient_id)
                 logger.info(f"Patient {fname} {lname} created with id: {patient_id}")
 
-           # Seed multiple doctors
+            # Seed multiple doctors
             logger.info("Seeding doctors...")
             doctors = []
             doctor_data = [
@@ -77,18 +93,31 @@ async def seed_data():
                 )
                 doctor_id = await conn.fetchval(
                     """
-                    INSERT INTO doctors (user_id, first_name, last_name, title, bio, experience_years, patients_count, location, availability, profile_picture_url)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    INSERT INTO doctors (user_id, first_name, last_name, title, bio, experience_years, patients_count, location, profile_picture_url)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                     RETURNING id
                     """,
-                    doctor_user_id, fname, lname, title, f"A {title.lower()} with {exp} years of experience.", exp, patients_count, loc,
-                    '{"date": "2025-07-25", "time": "14:30"}',
-                    pic_url
+                    doctor_user_id, fname, lname, title, f"A {title.lower()} with {exp} years of experience.", exp, patients_count, loc, pic_url
                 )
                 doctors.append(doctor_id)
                 logger.info(f"Doctor {fname} {lname} created with id: {doctor_id}")
 
-            # Seed doctor experiences (5 per doctor)
+            # Seed doctor availability slots
+            logger.info("Seeding doctor availability slots...")
+            for doctor_id in doctors:
+                for i in range(5):  # 5 slots per doctor
+                    slot_time = datetime(2025, 7, 26 + i, 9 + i % 4, 0)  # Spread out over 5 days, 9am-12pm
+                    status = choice(['available', 'booked', 'expired'])
+                    await conn.execute(
+                        """
+                        INSERT INTO doctor_availability_slots (doctor_id, available_at, status)
+                        VALUES ($1, $2, $3)
+                        """,
+                        doctor_id, slot_time, status
+                    )
+                logger.info(f"Availability slots seeded for doctor id: {doctor_id}")
+
+            # Seed doctor experiences
             logger.info("Seeding doctor experiences...")
             for i, doctor_id in enumerate(doctors):
                 for j in range(5):
@@ -155,7 +184,7 @@ async def seed_data():
                         f"Diagnosis {i + j + 1}",
                         f"Notes for patient {j + 1} with doctor {i + 1}",
                         f"Prescription {i + j + 1}: Take medication X",
-                        datetime(2025, 8, 1 + i + j, 10, 0, 0)  # Varying follow-up dates
+                        datetime(2025, 8, 1 + i + j, 10, 0, 0)
                     )
                 logger.info(f"Summary seeded for doctor id: {doctor_id}")
 
@@ -222,14 +251,15 @@ async def seed_data():
                 logger.info(f"Category {name} created with id: {cat_id}")
 
             logger.info("Seeding products...")
-            for i in range(7):  # More than 5
+            for i in range(7):
                 await conn.execute(
                     """
-                    INSERT INTO products (name, description, price, currency, image_urls, category_id)
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    INSERT INTO products (name, description, price, currency, image_urls, category_id, key_benefits, specifications)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
                     """,
                     f"Product {i+1}", f"Description for product {i+1}", 50000 + i * 1000, "NGN",
-                    [f"https://example.com/product{i+1}.jpg"], categories[i % len(categories)]
+                    [f"https://example.com/product{i+1}.jpg"], categories[i % len(categories)],
+                    [f"Benefit {i+1}", f"Benefit {i+2}"], f'[{{"name": "Weight", "value": "{i+1} lbs"}}]'
                 )
             logger.info("Products seeded.")
 
@@ -248,16 +278,17 @@ async def seed_data():
             # Seed blog posts
             logger.info("Seeding blog posts...")
             for i in range(6):
-                category_id = categories[i % len(categories)]  # Cycle through seeded categories
+                category_id = categories[i % len(categories)]
                 await conn.execute(
                     """
-                    INSERT INTO blog_posts (title, category_id, description, content_type, content_url, thumbnail_url, mood_relevance, user_id)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+                    INSERT INTO blog_posts (title, category_id, description, content_type, content_url, thumbnail_url, duration, mood_relevance, user_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
                     """,
                     f"Blog Post {i+1}", category_id, f"Description {i+1}",
                     ["article", "video", "audio"][i % 3],
                     f"<p>Content {i+1}</p>" if i % 3 == 0 else f"https://example.com/content{i+1}.{['mp4', 'mp3'][i % 2]}",
-                    f"https://example.com/thumb{i+1}.jpg", f'{{"Happy": 0.3, "Calm": 0.9, "Manic": 0.1, "Sad": 0.4, "Angry": 0.0}}',
+                    f"https://example.com/thumb{i+1}.jpg", 300 if i % 3 != 0 else None,
+                    f'{{"Happy": 0.3, "Calm": 0.9, "Manic": 0.1, "Sad": 0.4, "Angry": 0.0}}',
                     patients[i % len(patients)]
                 )
             logger.info("Blog posts seeded.")

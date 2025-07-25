@@ -12,6 +12,12 @@ async def create_tables():
                 is_doctor BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+                           
+            CREATE TABLE IF NOT EXISTS therapy (
+                id SERIAL PRIMARY KEY,
+                therapy_type VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
 
             CREATE TABLE IF NOT EXISTS patients (
                 id SERIAL PRIMARY KEY,
@@ -23,6 +29,8 @@ async def create_tables():
                 profile_image_url VARCHAR(255), -- URL to the patient's profile image
                 phone_number VARCHAR(20),
                 occupation VARCHAR(100),
+                therapy_type INTEGER REFERENCES therapy(id),
+                therapy_criticality VARCHAR(50) CHECK (therapy_criticality IN ('High', 'Medium', 'Low')),
                 emergency_contact_name VARCHAR(100),
                 emergency_contact_phone VARCHAR(20),
                 marital_status VARCHAR(20) CHECK (marital_status IN ('Single', 'Married', 'Divorced', 'Widowed')),
@@ -40,9 +48,18 @@ async def create_tables():
                 patients_count INTEGER,
                 location VARCHAR(100),
                 rating DECIMAL(3,1) DEFAULT 0.0,
-                availability JSONB,
                 profile_picture_url VARCHAR(255), -- URL to the doctor's profile picture
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+                           
+            CREATE TABLE IF NOT EXISTS doctor_availability_slots (
+                id SERIAL PRIMARY KEY,
+                doctor_id INTEGER REFERENCES doctors(id) ON DELETE CASCADE,
+                available_at TIMESTAMP NOT NULL,             -- exact date & time
+                status VARCHAR(20) DEFAULT 'available',      -- 'available', 'booked', 'expired'
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                UNIQUE (doctor_id, available_at)             -- prevent duplicate time slots per doctor
             );
 
             CREATE TABLE IF NOT EXISTS doctors_experience (
@@ -178,4 +195,5 @@ async def create_tables():
                 current_mood VARCHAR(50) NOT NULL CHECK (current_mood IN ('Happy', 'Calm', 'Manic', 'Sad', 'Angry')),
                 last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
+
             """)
