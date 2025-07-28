@@ -99,7 +99,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                 """
                 SELECT 
                     d.id AS doctor_id,
-                    d.user_id,
+                    d.user_id AS id,
                     d.first_name,
                     d.last_name,
                     d.title,
