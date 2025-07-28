@@ -1,5 +1,7 @@
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, List, Dict
+from datetime import datetime
+
 
 class Availability(BaseModel):
     day: str
@@ -32,3 +34,6 @@ class ReviewCreate(BaseModel):
     rating: int
     comment: str
     user_id: Optional[int] = None  # If needed based on your auth system
+
+class CreateAvailability(BaseModel):
+    available_at: datetime

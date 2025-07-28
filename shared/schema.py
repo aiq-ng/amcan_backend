@@ -55,11 +55,11 @@ async def create_tables():
             CREATE TABLE IF NOT EXISTS doctor_availability_slots (
                 id SERIAL PRIMARY KEY,
                 doctor_id INTEGER REFERENCES doctors(id) ON DELETE CASCADE,
-                available_at TIMESTAMP NOT NULL,             -- exact date & time
-                status VARCHAR(20) DEFAULT 'available',      -- 'available', 'booked', 'expired'
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                available_at TIMESTAMP WITH TIME ZONE NOT NULL,             -- exact date & time, now correctly defined with timezone
+                status VARCHAR(20) DEFAULT 'available',                 -- 'available', 'booked', 'expired'
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Changed to TIMESTAMP WITH TIME ZONE for consistency
 
-                UNIQUE (doctor_id, available_at)             -- prevent duplicate time slots per doctor
+                UNIQUE (doctor_id, available_at)                        -- prevent duplicate time slots per doctor
             );
 
             CREATE TABLE IF NOT EXISTS doctors_experience (

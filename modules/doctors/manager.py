@@ -1,6 +1,6 @@
 from .models import DoctorCreate, DoctorResponse
 from shared.db import db
-from datetime import datetime
+import datetime
 
 class DoctorManager:
     
@@ -441,3 +441,77 @@ class DoctorManager:
                     result['created_at'] = result['created_at'].isoformat()
                 return result
             return None
+
+    @staticmethod
+    async def create_availability_slot(doctor_id: int, available_at: datetime.datetime):
+        """
+        Creates a new availability slot for a doctor.
+
+        Args:
+            doctor_id: The ID of the doctor.
+            available_at: A timezone-aware datetime object representing the start
+                        time of the availability slot.
+
+        Returns:
+            A dictionary representing the newly created availability slot,
+            with datetime objects converted to ISO 8601 strings.
+
+        Raises:
+            ValueError: If the doctor is not found, or if an availability slot
+                        already exists for the given doctor and time.
+            TypeError: If 'available_at' is not a timezone-aware datetime object.
+        """
+        if not isinstance(available_at, datetime.datetime):
+            raise TypeError("available_at must be a datetime object.")
+        if available_at.tzinfo is None:
+            raise TypeError("available_at must be a timezone-aware datetime object.")
+
+        async with db.get_connection() as conn:
+            # Check if doctor exists
+            doctor = await conn.fetchrow(
+                """
+                SELECT id FROM doctors WHERE id = $1
+                """,
+                doctor_id
+            )
+            if not doctor:
+                raise ValueError("Doctor not found")
+
+            # Check if slot already exists for the exact time (timezone-aware comparison)
+            existing_slot = await conn.fetchrow(
+                """
+                SELECT id FROM doctor_availability_slots 
+                WHERE doctor_id = $1 AND available_at = $2
+                """,
+                doctor_id,
+                available_at
+            )
+            if existing_slot:
+                raise ValueError("Availability slot already exists for this time")
+
+            # Create new availability slot
+            row = await conn.fetchrow(
+                """
+                INSERT INTO doctor_availability_slots (doctor_id, available_at, status)
+                VALUES ($1, $2, 'available')
+                RETURNING id, doctor_id, available_at, status, created_at
+                """,
+                doctor_id,
+                available_at
+            )
+
+            if row:
+                result = dict(row)
+                # Convert datetime objects to ISO 8601 strings for consistent output
+                # isoformat() will include timezone offset since they are timezone-aware
+                if 'created_at' in result and isinstance(result['created_at'], datetime.datetime):
+                    result['created_at'] = result['created_at'].isoformat()
+                if 'available_at' in result and isinstance(result['available_at'], datetime.datetime):
+                    result['available_at'] = result['available_at'].isoformat()
+                return result
+            
+            # This part should ideally not be reached if INSERT RETURNING is successful,
+            # but good to have a fallback or handle specific cases.
+            return None
+
+
