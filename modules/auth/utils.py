@@ -110,6 +110,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                     d.rating,
                     d.profile_picture_url,
                     d.created_at,
+                    u.is_doctor,
+                    u.is_admin,
                     (
                         SELECT JSONB_AGG(
                             JSONB_BUILD_OBJECT(
@@ -172,12 +174,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                         )
                     ) FILTER (WHERE a.id IS NOT NULL) AS appointments_today
                 FROM doctors d
+                JOIN users u ON d.user_id = u.id
                 LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = CURRENT_DATE
                 LEFT JOIN doctors_reviews dr ON d.id = dr.doctor_id
                 LEFT JOIN doctors_experience de ON d.id = de.doctor_id
                 LEFT JOIN doctors_patients dp ON d.id = dp.doctor_id
                 WHERE d.user_id = $1
-                GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at;
+                GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at, u.is_doctor, u.is_admin;
                 """,
                 user["id"]
 
