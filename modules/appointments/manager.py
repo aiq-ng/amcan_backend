@@ -310,13 +310,17 @@ class AppointmentManager:
                     d.profile_picture_url AS doctor_profile_picture_url,
                     p.first_name AS patient_first_name,
                     p.last_name AS patient_last_name,
+                    t.therapy_type AS therapy_name,
+                    u.email AS patient_email,
                     asumm.diagnosis,
                     asumm.notes,
                     asumm.prescription,
                     asumm.follow_up_date
                 FROM appointments a
                 JOIN doctors d ON a.doctor_id = d.id
-                JOIN patients p ON a.patient_id = p.user_id
+                JOIN patients p ON a.patient_id = p.id
+                JOIN users u ON p.user_id = u.id
+                LEFT JOIN therapy t ON p.therapy_type = t.id
                 LEFT JOIN appointments_summary asumm ON a.id = asumm.id
                 ORDER BY a.slot_time DESC
                 """
