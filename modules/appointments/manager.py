@@ -186,7 +186,7 @@ class AppointmentManager:
                     asumm.follow_up_date
                 FROM appointments a
                 JOIN doctors d ON a.doctor_id = d.id
-                JOIN patients p ON a.patient_id = p.user_id
+                JOIN patients p ON a.patient_id = p.id
                 LEFT JOIN appointments_summary asumm ON a.id = asumm.id
                 WHERE a.doctor_id = $1
                 ORDER BY a.slot_time DESC

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 router = APIRouter(prefix="/patients", tags=["patients"])
 from .models import PatientCreate, PatientUpdate, PatientResponse
-from .manager import get_patient_by_user_id, create_patient, update_patient, delete_patient, get_all_patients, get_patient_by_patient_id
+from .manager import get_patient_by_user_id, create_patient, update_patient, delete_patient, get_all_patients, get_patient_using_id
 from modules.auth.utils import get_current_user
 
 router = APIRouter()
@@ -31,8 +31,9 @@ async def get_patient_by_user(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Patient not found")
     return patient
 
+@router.get('/{patient_id}')
 async def get_patient_by_patient_id(patient_id: int, current_user: dict = Depends(get_current_user)):
-    patient = await get_patient_by_patient_id(patient_id)
+    patient = await get_patient_using_id(patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     return patient

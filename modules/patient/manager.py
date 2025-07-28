@@ -95,9 +95,9 @@ async def get_patient_by_user_id(user_id: int) -> dict:
             return result
         return None
     
-async def get_patient_by_patient_id(patient_id: int) -> dict:
+async def get_patient_using_id(patient_id: int) -> dict:
     async with db.get_connection() as conn:
-        row = await conn.fetchone(
+        row = await conn.fetchrow(
             """
             SELECT 
                 p.id AS patient_id,
@@ -115,7 +115,6 @@ async def get_patient_by_patient_id(patient_id: int) -> dict:
                 p.marital_status,
                 p.profile_image_url,
                 p.created_at,
-                p.updated_at,
                 asumm.id AS summary_id,
                 asumm.diagnosis,
                 asumm.notes,
@@ -133,18 +132,18 @@ async def get_patient_by_patient_id(patient_id: int) -> dict:
         )
         if row:
             result = dict(row)
-            if 'created_at' in result and isinstance(result['created_at'], datetime):
-                result['created_at'] = result['created_at'].isoformat()
-            if 'updated_at' in result and isinstance(result['updated_at'], datetime):
-                result['updated_at'] = result['updated_at'].isoformat()
-            if 'date_of_birth' in result and isinstance(result['date_of_birth'], datetime):
-                result['date_of_birth'] = result['date_of_birth'].isoformat()
-            if 'summary_created_at' in result and isinstance(result['summary_created_at'], datetime):
-                result['summary_created_at'] = result['summary_created_at'].isoformat()
-            if 'summary_updated_at' in result and isinstance(result['summary_updated_at'], datetime):
-                result['summary_updated_at'] = result['summary_updated_at'].isoformat()
-            if 'follow_up_date' in result and isinstance(result['follow_up_date'], datetime):
-                result['follow_up_date'] = result['follow_up_date'].isoformat()
+            # if 'created_at' in result and isinstance(result['created_at'], datetime):
+            #     result['created_at'] = result['created_at'].isoformat()
+            # if 'updated_at' in result and isinstance(result['updated_at'], datetime):
+            #     result['updated_at'] = result['updated_at'].isoformat()
+            # if 'date_of_birth' in result and isinstance(result['date_of_birth'], datetime):
+            #     result['date_of_birth'] = result['date_of_birth'].isoformat()
+            # if 'summary_created_at' in result and isinstance(result['summary_created_at'], datetime):
+            #     result['summary_created_at'] = result['summary_created_at'].isoformat()
+            # if 'summary_updated_at' in result and isinstance(result['summary_updated_at'], datetime):
+            #     result['summary_updated_at'] = result['summary_updated_at'].isoformat()
+            # if 'follow_up_date' in result and isinstance(result['follow_up_date'], datetime):
+            #     result['follow_up_date'] = result['follow_up_date'].isoformat()
             return result
         return None
 
