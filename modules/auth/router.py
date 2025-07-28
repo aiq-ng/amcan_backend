@@ -33,6 +33,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     print(f"[AUTH] /me called for user: {current_user.get('email', 'unknown')}")
+    print("*** current user", current_user)
     return success_response(data=current_user, message="User details retrieved")
 
     # INSERT_YOUR_CODE

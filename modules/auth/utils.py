@@ -71,6 +71,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                     u.email,
                     u.is_admin,
                     u.is_doctor,
+                    p.id AS patient_id,
                     p.first_name,
                     p.last_name,
                     p.date_of_birth,
@@ -93,12 +94,104 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                 """,
                 user['id']
             )
+
+            doctor = await conn.fetchrow(
+                """
+                SELECT 
+                    d.id AS doctor_id,
+                    d.user_id,
+                    d.first_name,
+                    d.last_name,
+                    d.title,
+                    d.bio,
+                    d.experience_years,
+                    d.patients_count,
+                    d.location,
+                    d.rating,
+                    d.profile_picture_url,
+                    d.created_at,
+                    (
+                        SELECT JSONB_AGG(
+                            JSONB_BUILD_OBJECT(
+                                'review_id', dr.id,
+                                'user_id', dr.user_id,
+                                'rating', dr.rating,
+                                'comment', dr.comment,
+                                'created_at', dr.created_at
+                            )
+                        )
+                        FROM doctors_reviews dr 
+                        WHERE dr.doctor_id = d.id
+                    ) AS reviews,
+                    (
+                        SELECT JSONB_AGG(
+                            JSONB_BUILD_OBJECT(
+                                'experience_id', de.id,
+                                'institution', de.institution,
+                                'position', de.position,
+                                'start_date', de.start_date,
+                                'end_date', de.end_date,
+                                'description', de.description,
+                                'created_at', de.created_at
+                            )
+                        )
+                        FROM doctors_experience de 
+                        WHERE de.doctor_id = d.id
+                    ) AS experiences,
+                    (
+                        SELECT JSONB_AGG(
+                            JSONB_BUILD_OBJECT(
+                                'slot_id', das.id,
+                                'available_at', das.available_at,
+                                'status', das.status,
+                                'created_at', das.created_at
+                            )
+                        )
+                        FROM doctor_availability_slots das 
+                        WHERE das.doctor_id = d.id
+                    ) AS availability_slots,
+                    (
+                        SELECT COUNT(*) 
+                        FROM appointments a 
+                        WHERE a.doctor_id = d.id 
+                        AND DATE(a.slot_time) = CURRENT_DATE
+                    ) AS appointment_count_today,
+                    (
+                        SELECT COUNT(DISTINCT dp.patient_id) 
+                        FROM doctors_patients dp 
+                        WHERE dp.doctor_id = d.id
+                    ) AS patient_count,
+                    JSONB_AGG(
+                        JSONB_BUILD_OBJECT(
+                            'appointment_id', a.id,
+                            'patient_id', a.patient_id,
+                            'slot_time', a.slot_time,
+                            'complain', a.complain,
+                            'status', a.status,
+                            'created_at', a.created_at
+                        )
+                    ) FILTER (WHERE a.id IS NOT NULL) AS appointments_today
+                FROM doctors d
+                LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = CURRENT_DATE
+                LEFT JOIN doctors_reviews dr ON d.id = dr.doctor_id
+                LEFT JOIN doctors_experience de ON d.id = de.doctor_id
+                LEFT JOIN doctors_patients dp ON d.id = dp.doctor_id
+                WHERE d.user_id = $1
+                GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at;
+                """,
+                user["id"]
+
+            )
+
             if user is None:
                 logger.warning(f"User not found for email: {email}")
                 raise HTTPException(status_code=404, detail="User not found")
-            if patient is None:
+            if user["is_doctor"]:
+                return dict(doctor)
+            if patient is None and not user["is_doctor"]:
                 logger.warning(f"Patient not found for user_id: {user['id']}")
                 return dict(user)
+            
             logger.info(f"User found: {dict(user)}")
             logger.debug("Exiting get_current_user successfully")
             return dict(patient)
