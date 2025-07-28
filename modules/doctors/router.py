@@ -73,7 +73,7 @@ async def add_review(doctor_id: int, review: ReviewCreate, current_user: dict = 
         return error_response(str(e), status_code=500)
 
 @router.post("/{doctor_id}/availability")
-async def create_availability_slot(doctor_id: int, available_at: datetime, current_admin: dict = Depends(get_current_admin)):
+async def create_availability_slot(doctor_id: int, available_at: datetime, current_admin: dict = Depends(get_current_user)):
     try:
         slot_data = await DoctorManager.create_availability_slot(doctor_id, available_at)
         return success_response(data=slot_data, message="Availability slot created successfully")
