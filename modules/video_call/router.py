@@ -112,9 +112,9 @@ async def video_call_endpoint(appointment_id: int, websocket: WebSocket):
                     await websocket.send_json({"type": "error", "message": str(e)})
                     await disconnect_websocket(appointment_id, user_id)
 
-            except ValueError as e:
-                logger.error(f"Authentication error: {e}")
-                await websocket.close(code=1008, reason=str(e))
-        except Exception as e:
-            logger.error(f"Error during WebSocket setup: {e}", exc_info=True)
-            await websocket.close(code=1011, reason="Internal server error")
+        except ValueError as e:
+            logger.error(f"Authentication error: {e}")
+            await websocket.close(code=1008, reason=str(e))
+    except Exception as e:
+        logger.error(f"Error during WebSocket setup: {e}", exc_info=True)
+        await websocket.close(code=1011, reason="Internal server error")
