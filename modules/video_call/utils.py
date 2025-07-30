@@ -23,9 +23,12 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
             appointment_id
         )
         print("****appointment data", appointment)
-        if not appointment or (user_id not in (appointment["patient_id"], appointment["doctor_id"])):
-            await websocket.close(code=1008, reason="Unauthorized or invalid appointment")
-            raise ValueError("Unauthorized")
+        if not appointment:
+            await websocket.close(code=1008, reason="Appointment not found or not confirmed")
+            return None, None
+        if user_id not in (appointment["patient_id"], appointment["doctor_id"]):
+            await websocket.close(code=1008, reason="Unauthorized: user not part of appointment")
+            return None, None
 
     if appointment_id not in active_calls:
         active_calls[appointment_id] = {}
