@@ -26,8 +26,9 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
             appointment_id
         )
         logger.info(f"appointment data for appointment_id={appointment_id}: {appointment}")
+        logger.info(f"User ID matches either patient or doctor: {user_id in (appointment['patient_id'], appointment['doctor_id'])}")
     #     logger.debug(f"Fetched appointment data for appointment_id={appointment_id}: {appointment}")
-    #     if not appointment or (user_id not in (appointment["patient_id"], appointment["doctor_id"])):
+    #     if not appointment or (user_id not in (appointment.patient_id, appointment.doctor_id)}"):
     #         logger.warning(f"Unauthorized WebSocket connection attempt: appointment_id={appointment_id}, user_id={user_id}")
     #         await websocket.close(code=1008, reason="Unauthorized or invalid appointment")
     #         raise ValueError("Unauthorized")
