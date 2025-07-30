@@ -377,3 +377,108 @@ class AppointmentManager:
                 appt['slot_time'] = appt['slot_time'].isoformat()
             logger.info(f"[APPOINTMENT MANAGER] Appointment retrieved: {appointment_id}")
             return appt
+
+    @staticmethod
+    async def reschedule_appointment(appointment_id: int, new_slot_time: datetime, current_user: dict) -> dict:
+        """
+        Reschedule an appointment by updating its slot_time.
+        Only the patient who booked the appointment or an admin can reschedule.
+        Also updates the doctor_availability_slots table accordingly.
+        """
+        logger.info(f"[APPOINTMENT MANAGER] reschedule_appointment called for appointment_id={appointment_id} by user_id={current_user['id']} to new_slot_time={new_slot_time}")
+        async with db.get_connection() as conn:
+            # Fetch the appointment
+            appt = await conn.fetchrow(
+                "SELECT * FROM appointments WHERE id = $1",
+                appointment_id
+            )
+            if not appt:
+                logger.warning(f"[APPOINTMENT MANAGER] Appointment not found: {appointment_id}")
+                raise ValueError("Appointment not found")
+            # Only allow if current user is admin or the patient who booked the appointment
+            if not (current_user.get("is_admin") or appt["patient_id"] == current_user["id"]):
+                logger.warning(f"[APPOINTMENT MANAGER] Unauthorized reschedule attempt for appointment_id={appointment_id} by user_id={current_user['id']}")
+                raise ValueError("Not authorized to reschedule this appointment")
+            
+            doctor_id = appt["doctor_id"]
+            old_slot_time = appt["slot_time"]
+
+            # Check if new slot is available
+            slot_time_naive = new_slot_time.replace(tzinfo=None)
+            availability = await conn.fetchrow(
+                """
+                SELECT id, status FROM doctor_availability_slots
+                WHERE doctor_id = $1 AND available_at = $2
+                """,
+                doctor_id,
+                slot_time_naive
+            )
+            if not availability or availability["status"] != "available":
+                logger.warning(f"[APPOINTMENT MANAGER] New slot not available for doctor_id={doctor_id}, slot_time={new_slot_time}")
+                raise ValueError("Selected new slot is not available")
+
+            # Check if new slot is already booked in appointments
+            existing = await conn.fetchrow(
+                """
+                SELECT 1 FROM appointments
+                WHERE doctor_id = $1 AND slot_time = $2 AND id != $3
+                """,
+                doctor_id,
+                slot_time_naive,
+                appointment_id
+            )
+            if existing:
+                logger.warning(f"[APPOINTMENT MANAGER] New slot already booked for doctor_id={doctor_id}, slot_time={new_slot_time}")
+                raise ValueError("Selected new slot is already booked")
+
+            # Transaction: update appointment, update doctor_availability_slots
+            async with conn.transaction():
+                # 1. Mark old slot as available
+                if old_slot_time:
+                    await conn.execute(
+                        """
+                        UPDATE doctor_availability_slots
+                        SET status = 'available'
+                        WHERE doctor_id = $1 AND available_at = $2
+                        """,
+                        doctor_id,
+                        old_slot_time.replace(tzinfo=None)
+                    )
+                # 2. Mark new slot as booked
+                await conn.execute(
+                    """
+                    UPDATE doctor_availability_slots
+                    SET status = 'booked'
+                    WHERE doctor_id = $1 AND available_at = $2
+                    """,
+                    doctor_id,
+                    slot_time_naive
+                )
+                # 3. Update the appointment's slot_time
+                await conn.execute(
+                    """
+                    UPDATE appointments
+                    SET slot_time = $1
+                    WHERE id = $2
+                    """,
+                    slot_time_naive,
+                    appointment_id
+                )
+            logger.info(f"[APPOINTMENT MANAGER] Appointment {appointment_id} rescheduled to {new_slot_time}")
+            # Return the updated appointment
+            updated_appt = await conn.fetchrow(
+                """
+                SELECT * FROM appointments WHERE id = $1
+                """,
+                appointment_id
+            )
+            result = dict(updated_appt)
+            if 'created_at' in result and isinstance(result['created_at'], datetime):
+                result['created_at'] = result['created_at'].isoformat()
+            if 'slot_time' in result and isinstance(result['slot_time'], datetime):
+                result['slot_time'] = result['slot_time'].isoformat()
+            return result
+
+
+
+

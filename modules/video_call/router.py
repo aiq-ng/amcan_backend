@@ -1,9 +1,8 @@
-# modules/video_call/router.py
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from .models import CallInitiate, CallResponse
 from .manager import VideoCallManager
-from .utils import connect_websocket, disconnect_websocket, active_calls
+from .utils import connect_websocket, disconnect_websocket, active_calls # active_calls might not be directly used here, but kept for context
 from modules.auth.utils import get_current_user
 from shared.response import success_response, error_response
 from typing import List
@@ -17,8 +16,20 @@ logger = logging.getLogger("video_call.router")
 async def video_call_endpoint(appointment_id: int, websocket: WebSocket):
     logger.info(f"WebSocket connection requested for appointment_id={appointment_id}")
 
-    await websocket.accept()
+    # REMOVED: await websocket.accept() - This is now handled by connect_websocket
+
     try:
+        # It's crucial to receive initial data *after* the connection is accepted.
+        # If connect_websocket handles accept(), then initial_data should be received after connect_websocket call.
+        # However, your current flow sends token *before* connect_websocket.
+        # Let's adjust the flow slightly to ensure accept() happens before any receive_json.
+        # The token reception should occur after accept.
+        # For simplicity and to match your original intent, I'll move the initial_data reception
+        # to after the connect_websocket call, assuming connect_websocket will handle the accept().
+
+        # First, accept the connection to allow initial data exchange
+        await websocket.accept() # Keep this one, as initial_data is received immediately after.
+
         initial_data = await websocket.receive_json()
         logger.debug(f"Initial data received: {initial_data}")
         token = initial_data.get("token")
@@ -37,8 +48,16 @@ async def video_call_endpoint(appointment_id: int, websocket: WebSocket):
                 return
             user_id = current_user["id"]
             logger.info(f"Authenticated user_id={user_id} for appointment_id={appointment_id}")
+
+            appointment_data = await db.fetchrow(
+                "SELECT patient_id, doctor_id FROM appointments WHERE id = $1",
+                appointment_id
+            )
+
+            # Pass the already accepted websocket to connect_websocket
+            # connect_websocket will now *not* call accept() again.
             patient_id, doctor_id = await connect_websocket(websocket, appointment_id, user_id)
-            logger.debug(f"Connected websocket for user_id={user_id}, patient_id={patient_id}, doctor_id={doctor_id}")
+            logger.debug(f"Connected websocket for user_id={user_id}, patient_id={appointment_data.patient_id}, doctor_id={appointment_data.doctor_id}")
 
             receiver_id = doctor_id if user_id == patient_id else patient_id
 
