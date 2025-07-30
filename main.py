@@ -13,6 +13,7 @@ from modules.video_call.router import router as video_call_router
 from modules.ecommerce.router import router as ecommerce_router
 from modules.blog.router import router as blog_router
 from modules.patient.router import router as patient_router
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Mental Health Therapy App")
 
@@ -31,11 +32,20 @@ app.include_router(ecommerce_router, prefix="/ecommerce", tags=["ecommerce"])
 app.include_router(blog_router, prefix="/blog", tags=["blog"])
 app.include_router(patient_router, prefix="/patients", tags=["patients"])
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.on_event("startup")
 async def startup_event():
     await init_db()
     await create_tables()
     await seed_data()
+
 
 @app.get("/")
 async def root():
