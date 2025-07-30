@@ -1,12 +1,15 @@
+import logging
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict
 from shared.db import db
+
+logger = logging.getLogger("video_call.utils")
 
 # In-memory storage for active video call WebSocket connections
 active_calls: Dict[int, Dict[int, WebSocket]] = {}  # appointment_id -> {user_id: websocket}
 
 async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: int):
-    print("WebSocket connected", appointment_id, user_id)
+    logger.info(f"WebSocket connect requested: appointment_id={appointment_id}, user_id={user_id}")
     """Manage WebSocket connection and authentication for video calls."""
     # REMOVED: await websocket.accept() - It's now called in the router endpoint before this function.
     # If the router endpoint *didn't* call accept(), you'd keep it here.
@@ -22,31 +25,36 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
             """,
             appointment_id
         )
-        print("****appointment data", appointment)
-        if not appointment:
-            await websocket.close(code=1008, reason="Appointment not found or not confirmed")
-            return None, None
-        if user_id not in (appointment["patient_id"], appointment["doctor_id"]):
-            await websocket.close(code=1008, reason="Unauthorized: user not part of appointment")
-            return None, None
+        logger.debug(f"Fetched appointment data for appointment_id={appointment_id}: {appointment}")
+        if not appointment or (user_id not in (appointment["patient_id"], appointment["doctor_id"])):
+            logger.warning(f"Unauthorized WebSocket connection attempt: appointment_id={appointment_id}, user_id={user_id}")
+            await websocket.close(code=1008, reason="Unauthorized or invalid appointment")
+            raise ValueError("Unauthorized")
 
     if appointment_id not in active_calls:
+        logger.debug(f"Creating new active_calls entry for appointment_id={appointment_id}")
         active_calls[appointment_id] = {}
     active_calls[appointment_id][user_id] = websocket
+    logger.info(f"WebSocket connected: appointment_id={appointment_id}, user_id={user_id}")
+    logger.debug(f"Current active_calls: {active_calls}")
     return appointment["patient_id"], appointment["doctor_id"]
 
 async def disconnect_websocket(appointment_id: int, user_id: int):
     """Handle WebSocket disconnection and update call status."""
+    logger.info(f"Disconnecting WebSocket: appointment_id={appointment_id}, user_id={user_id}")
     if appointment_id in active_calls and user_id in active_calls[appointment_id]:
         del active_calls[appointment_id][user_id]
+        logger.debug(f"Removed user_id={user_id} from active_calls[{appointment_id}]")
         if not active_calls[appointment_id]:
+            logger.info(f"No more active users for appointment_id={appointment_id}, ending call in DB")
             del active_calls[appointment_id]
             # Update call status to ended
             async with db.get_connection() as conn:
-                await conn.execute(
+                result = await conn.execute(
                     """
                     UPDATE video_calls SET end_time = CURRENT_TIMESTAMP, status = 'ended'
                     WHERE appointment_id = $1 AND status = 'active'
                     """,
                     appointment_id
                 )
+                logger.debug(f"Updated video_calls status to 'ended' for appointment_id={appointment_id}, DB result: {result}")
