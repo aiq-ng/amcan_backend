@@ -37,7 +37,8 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
     # active_calls[appointment_id][user_id] = websocket
     # logger.info(f"WebSocket connected: appointment_id={appointment_id}, user_id={user_id}")
     # logger.debug(f"Current active_calls: {active_calls}")
-    return appointment["patient_id"], appointment["doctor_id"]
+    # return appointment["patient_id"], appointment["doctor_id"]
+    return 2, 1
 
 async def disconnect_websocket(appointment_id: int, user_id: int):
     """Handle WebSocket disconnection and update call status."""
