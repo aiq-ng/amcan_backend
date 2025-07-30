@@ -25,22 +25,22 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
             """,
             appointment_id
         )
-        logger.debug(f"Fetched appointment data for appointment_id={appointment_id}: {appointment}")
-        # logger.debug(f"patient_id={appointment.patient_id}, doctor_id={appointment.doctor_id}")
-        # if not appointment:
-        #     logger.warning(f"Unauthorized WebSocket connection attempt: appointment_id={appointment_id}, user_id={user_id}")
-        #     await websocket.close(code=1008, reason="Unauthorized or invalid appointment")
-        #     raise ValueError("Unauthorized")
+    logger.debug(f"Fetched appointment data for appointment_id={appointment_id}: {appointment}")
+    # logger.debug(f"patient_id={appointment.patient_id}, doctor_id={appointment.doctor_id}")
+    # if not appointment:
+    #     logger.warning(f"Unauthorized WebSocket connection attempt: appointment_id={appointment_id}, user_id={user_id}")
+    #     await websocket.close(code=1008, reason="Unauthorized or invalid appointment")
+    #     raise ValueError("Unauthorized")
 
-        # if appointment_id not in active_calls:
-        #     logger.debug(f"Creating new active_calls entry for appointment_id={appointment_id}")
-        #     active_calls[appointment_id] = {}
-        # active_calls[appointment_id][user_id] = websocket
-        # logger.info(f"WebSocket connected: appointment_id={appointment_id}, user_id={user_id}")
-        # logger.debug(f"Current active_calls: {active_calls}")
-        # patient_id = appointment.patient_id
-        # doctor_id = appointment.doctor_id
-        return 5, 1
+    # if appointment_id not in active_calls:
+    #     logger.debug(f"Creating new active_calls entry for appointment_id={appointment_id}")
+    #     active_calls[appointment_id] = {}
+    # active_calls[appointment_id][user_id] = websocket
+    # logger.info(f"WebSocket connected: appointment_id={appointment_id}, user_id={user_id}")
+    # logger.debug(f"Current active_calls: {active_calls}")
+    # patient_id = appointment.patient_id
+    # doctor_id = appointment.doctor_id
+    return 5, 1
 
 async def disconnect_websocket(appointment_id: int, user_id: int):
     """Handle WebSocket disconnection and update call status."""
