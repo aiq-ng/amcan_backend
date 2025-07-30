@@ -6,6 +6,7 @@ from shared.db import db
 active_calls: Dict[int, Dict[int, WebSocket]] = {}  # appointment_id -> {user_id: websocket}
 
 async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: int):
+    print("WebSocket connected", appointment_id, user_id)
     """Manage WebSocket connection and authentication for video calls."""
     # REMOVED: await websocket.accept() - It's now called in the router endpoint before this function.
     # If the router endpoint *didn't* call accept(), you'd keep it here.
