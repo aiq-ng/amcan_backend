@@ -62,7 +62,7 @@ async def video_call_endpoint(appointment_id: int, websocket: WebSocket):
             # Pass the already accepted websocket to connect_websocket
             # connect_websocket will now *not* call accept() again.
             patient_id, doctor_id = await connect_websocket(websocket, appointment_id, user_id)
-            logger.debug(f"Connected websocket for user_id={user_id}, patient_id={appointment_data.patient_id}, doctor_id={appointment_data.doctor_id}")
+            logger.debug(f"Connected websocket for user_id={user_id}, patient_id={patient_id}, doctor_id={doctor_id}")
 
             receiver_id = doctor_id if user_id == patient_id else patient_id
 
