@@ -31,12 +31,12 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
         #     await websocket.close(code=1008, reason="Unauthorized or invalid appointment")
         #     raise ValueError("Unauthorized")
 
-    if appointment_id not in active_calls:
-        logger.debug(f"Creating new active_calls entry for appointment_id={appointment_id}")
-        active_calls[appointment_id] = {}
-    active_calls[appointment_id][user_id] = websocket
-    logger.info(f"WebSocket connected: appointment_id={appointment_id}, user_id={user_id}")
-    logger.debug(f"Current active_calls: {active_calls}")
+    # if appointment_id not in active_calls:
+    #     logger.debug(f"Creating new active_calls entry for appointment_id={appointment_id}")
+    #     active_calls[appointment_id] = {}
+    # active_calls[appointment_id][user_id] = websocket
+    # logger.info(f"WebSocket connected: appointment_id={appointment_id}, user_id={user_id}")
+    # logger.debug(f"Current active_calls: {active_calls}")
     return appointment["patient_id"], appointment["doctor_id"]
 
 async def disconnect_websocket(appointment_id: int, user_id: int):
