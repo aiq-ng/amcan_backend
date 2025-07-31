@@ -3,7 +3,7 @@ from .models import CallInitiate, CallResponse
 from shared.db import db
 from datetime import datetime
 
-active_calls = {}
+from .utils import active_calls
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class VideoCallManager:
     @staticmethod
     async def broadcast_signal(appointment_id: int, signal_data: dict):
         logger.info(f"Broadcasting signal for appointment_id={appointment_id}, signal_data={signal_data}")
+        logger.info(f"checking active calls: {active_calls}")
         if appointment_id in active_calls:
             for user_id, websocket in active_calls[appointment_id].items():
                 logger.debug(f"Sending signal to user_id={user_id}")
