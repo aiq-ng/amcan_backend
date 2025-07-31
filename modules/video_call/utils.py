@@ -26,10 +26,8 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
             appointment_id
         )
     appointment_data = dict(appointment)
-    logger.info(f"Fetched appointment data for appointment_id={appointment_id}: {appointment}")
-    logger.info(f"Fetched appointment data json for appointment_id={appointment_id}: {appointment}")
+    logger.info(f"Fetched appointment data json for appointment_id={appointment_id}: {appointment_data}")
     logger.info(f"patient_id={appointment['patient_id']}, doctor_id={appointment['doctor_id']}")
-    logger.info(f"patient_id={appointment.patient_id}, doctor_id={appointment.doctor_id}")
     if not appointment:
         logger.warning(f"Unauthorized WebSocket connection attempt: appointment_id={appointment_id}, user_id={user_id}")
         await websocket.close(code=1008, reason="Unauthorized or invalid appointment")
@@ -41,8 +39,8 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
     active_calls[appointment_id][user_id] = websocket
     logger.info(f"WebSocket connected: appointment_id={appointment_id}, user_id={user_id}")
     logger.debug(f"Current active_calls: {active_calls}")
-    patient_id = appointment.patient_id
-    doctor_id = appointment.doctor_id
+    patient_id = appointment['patient_id']
+    doctor_id = appointment['doctor_id']
     return doctor_id, patient_id
 
 async def disconnect_websocket(appointment_id: int, user_id: int):
