@@ -460,10 +460,10 @@ class AppointmentManager:
     async def reschedule_appointment(appointment_id: int, new_slot_time: datetime, current_user: dict) -> dict:
         """
         Reschedule an appointment by updating its slot_time.
-        Only the patient who booked the appointment or an admin can reschedule.
+        Only the patient who booked the appointment, the doctor in the appointment, or an admin can reschedule.
         Also updates the doctor_availability_slots table accordingly.
         """
-        logger.info(f"[APPOINTMENT MANAGER] reschedule_appointment called for appointment_id={appointment_id} by user_id={current_user['id']} to new_slot_time={new_slot_time}")
+        logger.info(f"[APPOINTMENT MANAGER] reschedule_appointment called for appointment_id={appointment_id} by user_id={current_user['id']} to new_slot_time={new_slot_time!r}")
         async with db.get_connection() as conn:
             # Fetch the appointment
             appt = await conn.fetchrow(
@@ -473,16 +473,75 @@ class AppointmentManager:
             if not appt:
                 logger.warning(f"[APPOINTMENT MANAGER] Appointment not found: {appointment_id}")
                 raise ValueError("Appointment not found")
-            # Only allow if current user is admin or the patient who booked the appointment
-            if not (current_user.get("is_admin") or appt["patient_id"] == current_user["id"]):
+            # Only allow if current user is admin, the patient who booked the appointment, or the doctor in the appointment
+            is_admin = current_user.get("is_admin", False)
+            is_patient = appt["patient_id"] == current_user.get("id")
+            is_doctor = (
+                (current_user.get("doctor_id") is not None and appt["doctor_id"] == current_user.get("doctor_id"))
+                or (appt["doctor_id"] == current_user.get("id"))
+            )
+            if not (is_admin or is_patient or is_doctor):
                 logger.warning(f"[APPOINTMENT MANAGER] Unauthorized reschedule attempt for appointment_id={appointment_id} by user_id={current_user['id']}")
                 raise ValueError("Not authorized to reschedule this appointment")
             
             doctor_id = appt["doctor_id"]
             old_slot_time = appt["slot_time"]
 
+            # --- Slot time parsing and error logging ---
+            from datetime import datetime
+
+            # The error "Invalid isoformat string: 'new_slot_time=datetime.datetime(2025, 8, 2, 15, 0)'" 
+            # is likely caused by passing a string like "new_slot_time=datetime.datetime(2025, 8, 2, 15, 0)" 
+            # to datetime.fromisoformat(), which expects a plain ISO string, not a repr of a keyword argument.
+            # This can happen if the input is a stringified Pydantic model or dict, not just the datetime string.
+
+            # Try to robustly extract the datetime
+            slot_time_naive = None
+            try:
+                if isinstance(new_slot_time, datetime):
+                    slot_time_naive = new_slot_time.replace(tzinfo=None)
+                    logger.info(f"[APPOINTMENT MANAGER] new_slot_time is a datetime object: {slot_time_naive}")
+                elif isinstance(new_slot_time, str):
+                    logger.info(f"[APPOINTMENT MANAGER] new_slot_time is a string: {new_slot_time}")
+                    # Try to extract the datetime string if it's in the form "new_slot_time=..."
+                    if new_slot_time.startswith("new_slot_time="):
+                        # Try to eval the right side if possible
+                        import re
+                        match = re.match(r"new_slot_time=(datetime\.datetime\([^)]+\))", new_slot_time)
+                        if match:
+                            # Try to eval the datetime constructor
+                            try:
+                                slot_time_naive = eval(match.group(1)).replace(tzinfo=None)
+                                logger.info(f"[APPOINTMENT MANAGER] Parsed slot_time_naive from eval: {slot_time_naive}")
+                            except Exception as e:
+                                logger.error(f"[APPOINTMENT MANAGER] Failed to eval new_slot_time: {e}")
+                                raise ValueError("Invalid new_slot_time format. Please provide an ISO datetime string.")
+                        else:
+                            # Try to extract the value after '='
+                            dt_str = new_slot_time.split("=", 1)[1].strip()
+                            try:
+                                slot_time_naive = datetime.fromisoformat(dt_str).replace(tzinfo=None)
+                                logger.info(f"[APPOINTMENT MANAGER] Parsed slot_time_naive from isoformat: {slot_time_naive}")
+                            except Exception as e:
+                                logger.error(f"[APPOINTMENT MANAGER] Failed to parse new_slot_time after '=': {e}")
+                                raise ValueError("Invalid new_slot_time format. Please provide an ISO datetime string.")
+                    else:
+                        try:
+                            slot_time_naive = datetime.fromisoformat(new_slot_time).replace(tzinfo=None)
+                            logger.info(f"[APPOINTMENT MANAGER] Parsed slot_time_naive from isoformat: {slot_time_naive}")
+                        except Exception as e:
+                            logger.error(f"[APPOINTMENT MANAGER] Failed to parse new_slot_time as isoformat: {e}")
+                            raise ValueError("Invalid new_slot_time format. Please provide an ISO datetime string.")
+                else:
+                    logger.error(f"[APPOINTMENT MANAGER] new_slot_time is of unexpected type: {type(new_slot_time)}")
+                    raise ValueError("Invalid new_slot_time type. Please provide a datetime object or ISO string.")
+            except Exception as e:
+                logger.error(f"[APPOINTMENT MANAGER] Error parsing new_slot_time: {e}")
+                raise ValueError("Invalid new_slot_time format. Please provide an ISO datetime string.")
+
+            # --- End slot time parsing ---
+
             # Check if new slot is available
-            slot_time_naive = new_slot_time.replace(tzinfo=None)
             availability = await conn.fetchrow(
                 """
                 SELECT id, status FROM doctor_availability_slots
@@ -492,8 +551,18 @@ class AppointmentManager:
                 slot_time_naive
             )
             if not availability or availability["status"] != "available":
-                logger.warning(f"[APPOINTMENT MANAGER] New slot not available for doctor_id={doctor_id}, slot_time={new_slot_time}")
-                raise ValueError("Selected new slot is not available")
+                logger.warning(f"[APPOINTMENT MANAGER] New slot not available for doctor_id={doctor_id}, slot_time={slot_time_naive}")
+                # raise ValueError("Selected new slot is not available")
+
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO doctor_availability_slots (doctor_id, available_at, status)
+                    VALUES ($1, $2, 'available')
+                    RETURNING id, doctor_id, available_at, status, created_at
+                    """,
+                    doctor_id,
+                    slot_time_naive
+                    )
 
             # Check if new slot is already booked in appointments
             existing = await conn.fetchrow(
@@ -506,43 +575,57 @@ class AppointmentManager:
                 appointment_id
             )
             if existing:
-                logger.warning(f"[APPOINTMENT MANAGER] New slot already booked for doctor_id={doctor_id}, slot_time={new_slot_time}")
+                logger.warning(f"[APPOINTMENT MANAGER] New slot already booked for doctor_id={doctor_id}, slot_time={slot_time_naive}")
                 raise ValueError("Selected new slot is already booked")
 
             # Transaction: update appointment, update doctor_availability_slots
             async with conn.transaction():
                 # 1. Mark old slot as available
                 if old_slot_time:
+                    try:
+                        await conn.execute(
+                            """
+                            UPDATE doctor_availability_slots
+                            SET status = 'available'
+                            WHERE doctor_id = $1 AND available_at = $2
+                            """,
+                            doctor_id,
+                            old_slot_time.replace(tzinfo=None)
+                        )
+                        logger.info(f"[APPOINTMENT MANAGER] Marked old slot as available for doctor_id={doctor_id}, old_slot_time={old_slot_time}")
+                    except Exception as e:
+                        logger.error(f"[APPOINTMENT MANAGER] Failed to mark old slot as available: {e}")
+                # 2. Mark new slot as booked
+                try:
                     await conn.execute(
                         """
                         UPDATE doctor_availability_slots
-                        SET status = 'available'
+                        SET status = 'booked'
                         WHERE doctor_id = $1 AND available_at = $2
                         """,
                         doctor_id,
-                        old_slot_time.replace(tzinfo=None)
+                        slot_time_naive
                     )
-                # 2. Mark new slot as booked
-                await conn.execute(
-                    """
-                    UPDATE doctor_availability_slots
-                    SET status = 'booked'
-                    WHERE doctor_id = $1 AND available_at = $2
-                    """,
-                    doctor_id,
-                    slot_time_naive
-                )
+                    logger.info(f"[APPOINTMENT MANAGER] Marked new slot as booked for doctor_id={doctor_id}, slot_time={slot_time_naive}")
+                except Exception as e:
+                    logger.error(f"[APPOINTMENT MANAGER] Failed to mark new slot as booked: {e}")
+                    raise
                 # 3. Update the appointment's slot_time
-                await conn.execute(
-                    """
-                    UPDATE appointments
-                    SET slot_time = $1
-                    WHERE id = $2
-                    """,
-                    slot_time_naive,
-                    appointment_id
-                )
-            logger.info(f"[APPOINTMENT MANAGER] Appointment {appointment_id} rescheduled to {new_slot_time}")
+                try:
+                    await conn.execute(
+                        """
+                        UPDATE appointments
+                        SET slot_time = $1
+                        WHERE id = $2
+                        """,
+                        slot_time_naive,
+                        appointment_id
+                    )
+                    logger.info(f"[APPOINTMENT MANAGER] Updated appointment {appointment_id} slot_time to {slot_time_naive}")
+                except Exception as e:
+                    logger.error(f"[APPOINTMENT MANAGER] Failed to update appointment slot_time: {e}")
+                    raise
+            logger.info(f"[APPOINTMENT MANAGER] Appointment {appointment_id} rescheduled to {slot_time_naive}")
             # Return the updated appointment
             updated_appt = await conn.fetchrow(
                 """
@@ -555,8 +638,88 @@ class AppointmentManager:
                 result['created_at'] = result['created_at'].isoformat()
             if 'slot_time' in result and isinstance(result['slot_time'], datetime):
                 result['slot_time'] = result['slot_time'].isoformat()
+            logger.info(f"[APPOINTMENT MANAGER] Returning updated appointment: {result}")
             return result
 
+    @staticmethod
+    async def update_appointment(
+        appointment_id: int,
+        doctor_id: int = None,
+        patient_id: int = None,
+        slot_time: datetime = None,
+        complain: str = None,
+        status: str = None,
+    ) -> dict:
+        """
+        Update an appointment's details.
+        Only provided fields will be updated.
+        Returns the updated appointment as a dict.
+        """
+        logger.info(f"[APPOINTMENT MANAGER] update_appointment called for id={appointment_id} with doctor_id={doctor_id}, patient_id={patient_id}, slot_time={slot_time}, complain={complain}, status={status}")
+        async with db.get_connection() as conn:
+            # Fetch current appointment
+            appt = await conn.fetchrow(
+                "SELECT * FROM appointments WHERE id = $1",
+                appointment_id
+            )
+            if not appt:
+                logger.warning(f"[APPOINTMENT MANAGER] No appointment found for id={appointment_id}")
+                return {"error": "Appointment not found"}
+
+            updates = []
+            params = []
+            param_idx = 1
+
+            # Only update provided fields
+            if doctor_id is not None:
+                updates.append(f"doctor_id = ${param_idx}")
+                params.append(doctor_id)
+                param_idx += 1
+            if patient_id is not None:
+                updates.append(f"patient_id = ${param_idx}")
+                params.append(patient_id)
+                param_idx += 1
+            if slot_time is not None:
+                # Optionally, update doctor_availability_slots if slot_time changes
+                updates.append(f"slot_time = ${param_idx}")
+                # Remove tzinfo for naive DB storage if needed
+                if hasattr(slot_time, "replace"):
+                    params.append(slot_time.replace(tzinfo=None))
+                else:
+                    params.append(slot_time)
+                param_idx += 1
+            if complain is not None:
+                updates.append(f"complain = ${param_idx}")
+                params.append(complain)
+                param_idx += 1
+            if status is not None:
+                updates.append(f"status = ${param_idx}")
+                params.append(status)
+                param_idx += 1
+
+            if not updates:
+                logger.info(f"[APPOINTMENT MANAGER] No fields to update for appointment id={appointment_id}")
+                return {"error": "No fields to update"}
+
+            params.append(appointment_id)
+            set_clause = ", ".join(updates)
+            query = f"""
+                UPDATE appointments
+                SET {set_clause}
+                WHERE id = ${param_idx}
+                RETURNING id, doctor_id, patient_id, slot_time, complain, status, created_at
+            """
+            row = await conn.fetchrow(query, *params)
+            if row:
+                result = dict(row)
+                if 'created_at' in result and isinstance(result['created_at'], datetime):
+                    result['created_at'] = result['created_at'].isoformat()
+                if 'slot_time' in result and isinstance(result['slot_time'], datetime):
+                    result['slot_time'] = result['slot_time'].isoformat()
+                logger.info(f"[APPOINTMENT MANAGER] Appointment updated: {result}")
+                return result
+            logger.warning(f"[APPOINTMENT MANAGER] No appointment updated for id={appointment_id}")
+            return {"error": "Appointment not updated"}
 
 
 

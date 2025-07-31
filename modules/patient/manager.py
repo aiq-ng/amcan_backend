@@ -7,40 +7,98 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-async def get_all_patients() -> list:
-    async with db.get_connection() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT 
-                p.id AS patient_id,
-                p.user_id,
-                p.first_name,
-                p.last_name,
-                p.date_of_birth,
-                p.address,
-                p.phone_number,
-                p.occupation,
-                p.therapy_type,
-                p.therapy_criticality,
-                p.emergency_contact_name,
-                p.emergency_contact_phone,
-                p.marital_status,
-                p.profile_image_url,
-                p.created_at,
-                asumm.id AS summary_id,
-                asumm.diagnosis,
-                asumm.notes,
-                asumm.prescription,
-                asumm.follow_up_date,
-                asumm.created_at AS summary_created_at,
-                asumm.updated_at AS summary_updated_at,
-                t.therapy_type AS therapy_name
-            FROM patients p
-            LEFT JOIN appointments_summary asumm ON p.user_id = asumm.patient_id
-            LEFT JOIN therapy t ON p.therapy_type = t.id
-            ORDER BY p.id
-            """
+async def get_all_patients(
+    page: int = 1,
+    page_size: int = 20,
+    search: str = None,
+    therapy_name: str = None,
+    created_at_from: datetime = None,
+    created_at_to: datetime = None,
+) -> dict:
+    """
+    Fetch all patients with optional search, filters, and pagination.
+    - search: matches first_name, last_name, address, occupation, phone_number, emergency_contact_name, emergency_contact_phone
+    - therapy_name: filter by therapy name (string)
+    - created_at_from, created_at_to: filter by created_at datetime range
+    Returns dict with 'data', 'total', 'page', 'page_size'
+    """
+    filters = []
+    params = []
+    param_idx = 1
+
+    if search:
+        filters.append(
+            f"(p.first_name ILIKE ${param_idx} OR p.last_name ILIKE ${param_idx} OR p.address ILIKE ${param_idx} OR p.occupation ILIKE ${param_idx} OR p.phone_number ILIKE ${param_idx} OR p.emergency_contact_name ILIKE ${param_idx} OR p.emergency_contact_phone ILIKE ${param_idx})"
         )
+        params.append(f"%{search}%")
+        param_idx += 1
+
+    if therapy_name is not None:
+        filters.append(f"t.therapy_type ILIKE ${param_idx}")
+        params.append(f"%{therapy_name}%")
+        param_idx += 1
+
+    if created_at_from is not None:
+        filters.append(f"p.created_at >= ${param_idx}")
+        params.append(created_at_from)
+        param_idx += 1
+
+    if created_at_to is not None:
+        filters.append(f"p.created_at <= ${param_idx}")
+        params.append(created_at_to)
+        param_idx += 1
+
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+
+    offset = (page - 1) * page_size
+    limit = page_size
+
+    count_query = f"""
+        SELECT COUNT(*) FROM patients p
+        LEFT JOIN therapy t ON p.therapy_type = t.id
+        {where_clause}
+    """
+
+    data_query = f"""
+        SELECT 
+            p.id AS patient_id,
+            p.user_id,
+            p.first_name,
+            p.last_name,
+            p.date_of_birth,
+            p.address,
+            p.phone_number,
+            p.occupation,
+            p.therapy_type,
+            p.therapy_criticality,
+            p.emergency_contact_name,
+            p.emergency_contact_phone,
+            p.marital_status,
+            p.profile_image_url,
+            p.created_at,
+            asumm.id AS summary_id,
+            asumm.diagnosis,
+            asumm.notes,
+            asumm.prescription,
+            asumm.follow_up_date,
+            asumm.created_at AS summary_created_at,
+            asumm.updated_at AS summary_updated_at,
+            t.therapy_type AS therapy_name
+        FROM patients p
+        LEFT JOIN appointments_summary asumm ON p.user_id = asumm.patient_id
+        LEFT JOIN therapy t ON p.therapy_type = t.id
+        {where_clause}
+        ORDER BY p.id
+        LIMIT ${param_idx} OFFSET ${param_idx + 1}
+    """
+
+    params_for_data = params.copy()
+    params_for_data.append(limit)
+    params_for_data.append(offset)
+
+    async with db.get_connection() as conn:
+        total = await conn.fetchval(count_query, *params)
+        rows = await conn.fetch(data_query, *params_for_data)
         result = [dict(row) for row in rows]
         for row in result:
             if 'created_at' in row and isinstance(row['created_at'], datetime):
@@ -55,7 +113,12 @@ async def get_all_patients() -> list:
                 row['summary_updated_at'] = row['summary_updated_at'].isoformat()
             if 'follow_up_date' in row and isinstance(row['follow_up_date'], datetime):
                 row['follow_up_date'] = row['follow_up_date'].isoformat()
-        return result
+        return {
+            "data": result,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
 
 async def get_patient_by_user_id(user_id: int) -> dict:
     async with db.get_connection() as conn:

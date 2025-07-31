@@ -31,3 +31,6 @@ class AppointmentResponse(BaseModel):
     slot_time: datetime
     status: str
     created_at: datetime
+
+class RescheduleAppointment(BaseModel):
+    new_slot_time: str
