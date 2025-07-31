@@ -51,12 +51,36 @@ async def get_doctor_user_id(user_id: int):
         return error_response(str(e), status_code=500)
 
 @router.get("/")
-async def get_all_doctors():
+async def get_all_doctors(
+    page: int = 1,
+    page_size: int = 10,
+    search: str = None,
+    specialty: str = None,
+    city: str = None,
+    is_active: bool = None
+):
     try:
-        doctors = await DoctorManager.get_doctors()
-        if not doctors:
-            return success_response(data=[], message="No doctors found")
-        return success_response(data=doctors, message="Doctors retrieved successfully")
+        filters = {}
+        if specialty is not None:
+            filters['specialty'] = specialty
+        if city is not None:
+            filters['city'] = city
+        if is_active is not None:
+            filters['is_active'] = is_active
+
+        result = await DoctorManager.get_doctors(
+            page=page,
+            page_size=page_size,
+            search=search,
+            specialty=specialty
+        )
+        
+       
+
+        return success_response(
+            data=result,
+            message="Doctors retrieved successfully"
+        )
     except Exception as e:
         return error_response(str(e), status_code=500)
 

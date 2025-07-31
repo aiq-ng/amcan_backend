@@ -47,148 +47,168 @@ class DoctorManager:
             return result
 
     @staticmethod
-    async def get_doctors(limit: int = 10, offset: int = 0) -> list:
-        async with db.get_connection() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT 
-                    d.id AS doctor_id,
-                    d.user_id,
-                    d.first_name,
-                    d.last_name,
-                    d.title,
-                    d.bio,
-                    d.experience_years,
-                    d.patients_count,
-                    d.location,
-                    d.rating,
-                    d.profile_picture_url,
-                    d.created_at,
-                    (
-                        SELECT JSONB_AGG(
-                            JSONB_BUILD_OBJECT(
-                                'review_id', dr.id,
-                                'user_id', dr.user_id,
-                                'rating', dr.rating,
-                                'comment', dr.comment,
-                                'created_at', dr.created_at
-                            )
-                        )
-                        FROM doctors_reviews dr 
-                        WHERE dr.doctor_id = d.id
-                    ) AS reviews,
-                    (
-                        SELECT JSONB_AGG(
-                            JSONB_BUILD_OBJECT(
-                                'experience_id', de.id,
-                                'institution', de.institution,
-                                'position', de.position,
-                                'start_date', de.start_date,
-                                'end_date', de.end_date,
-                                'description', de.description,
-                                'created_at', de.created_at
-                            )
-                        )
-                        FROM doctors_experience de 
-                        WHERE de.doctor_id = d.id
-                    ) AS experiences,
-                    (
-                        SELECT JSONB_AGG(
-                            JSONB_BUILD_OBJECT(
-                                'slot_id', das.id,
-                                'available_at', das.available_at,
-                                'status', das.status,
-                                'created_at', das.created_at
-                            )
-                        )
-                        FROM doctor_availability_slots das 
-                        WHERE das.doctor_id = d.id
-                    ) AS availability_slots,
-                    (
-                        SELECT COUNT(*) 
-                        FROM appointments a 
-                        WHERE a.doctor_id = d.id 
-                        AND DATE(a.slot_time) = CURRENT_DATE
-                    ) AS appointment_count_today,
-                    (
-                        SELECT COUNT(DISTINCT dp.patient_id) 
-                        FROM doctors_patients dp 
-                        WHERE dp.doctor_id = d.id
-                    ) AS patient_count,
-                    JSONB_AGG(
-                        JSONB_BUILD_OBJECT(
-                            'appointment_id', a.id,
-                            'patient_id', a.patient_id,
-                            'slot_time', a.slot_time,
-                            'complain', a.complain,
-                            'status', a.status
-                        )
-                    ) FILTER (WHERE a.id IS NOT NULL) AS appointments_today
-                FROM doctors d
-                LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = CURRENT_DATE
-                LEFT JOIN doctors_reviews dr ON d.id = dr.doctor_id
-                LEFT JOIN doctors_experience de ON d.id = de.doctor_id
-                LEFT JOIN doctors_patients dp ON d.id = dp.doctor_id
-                GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
-                LIMIT $1 OFFSET $2
-                """,
-                limit,
-                offset
+    async def get_doctors(
+        page: int = 1,
+        page_size: int = 10,
+        search: str = None,
+        location: str = None,
+        min_rating: float = None,
+        max_rating: float = None,
+        specialty: str = None,
+    ) -> dict:
+        """
+        Fetch doctors with optional filters, search, and pagination.
+        Returns a dict with 'data', 'total', 'page', 'page_size'.
+        """
+        filters = []
+        params = []
+        param_idx = 1
+
+        # Search by name, title, bio, or location
+        if search:
+            filters.append(
+                f"(d.first_name ILIKE ${param_idx} OR d.last_name ILIKE ${param_idx} OR d.title ILIKE ${param_idx} OR d.bio ILIKE ${param_idx} OR d.location ILIKE ${param_idx})"
             )
-            if not rows:
-                return []
-            else:
-                result = [dict(row) for row in rows]
-                # for item in result:
-                #     # Convert datetime objects to ISO format strings
-                #     if 'created_at' in item and isinstance(item['created_at'], datetime):
-                #         item['created_at'] = item['created_at'].isoformat()
-                #     # Safely handle reviews
-                #     if item['reviews']:
-                #         new_reviews = []
-                #         for review in item['reviews']:
-                #             review = dict(review)
-                #             if 'created_at' in review and isinstance(review['created_at'], datetime):
-                #                 review['created_at'] = review['created_at'].isoformat()
-                #             new_reviews.append(review)
-                #         item['reviews'] = new_reviews
-                #     # Safely handle experiences
-                #     if item['experiences']:
-                #         new_experiences = []
-                #         for exp in item['experiences']:
-                #             exp = dict(exp)
-                #             if 'start_date' in exp and isinstance(exp['start_date'], datetime):
-                #                 exp['start_date'] = exp['start_date'].isoformat()
-                #             if 'end_date' in exp:
-                #                 if exp['end_date'] is not None and isinstance(exp['end_date'], datetime):
-                #                     exp['end_date'] = exp['end_date'].isoformat()
-                #                 elif exp['end_date'] is not None and not isinstance(exp['end_date'], str):
-                #                     exp['end_date'] = str(exp['end_date'])
-                #             if 'created_at' in exp and isinstance(exp['created_at'], datetime):
-                #                 exp['created_at'] = exp['created_at'].isoformat()
-                #             new_experiences.append(exp)
-                #         item['experiences'] = new_experiences
-                #     # Safely handle availability_slots
-                #     if item['availability_slots']:
-                #         new_slots = []
-                #         for slot in item['availability_slots']:
-                #             slot = dict(slot)
-                #             if 'available_at' in slot and isinstance(slot['available_at'], datetime):
-                #                 slot['available_at'] = slot['available_at'].isoformat()
-                #             if 'created_at' in slot and isinstance(slot['created_at'], datetime):
-                #                 slot['created_at'] = slot['created_at'].isoformat()
-                #             new_slots.append(slot)
-                #         item['availability_slots'] = new_slots
-                #     # Safely handle appointments_today
-                #     if item['appointments_today']:
-                #         new_appts = []
-                #         for appt in item['appointments_today']:
-                #             appt = dict(appt)
-                #             if 'slot_time' in appt and isinstance(appt['slot_time'], datetime):
-                #                 appt['slot_time'] = appt['slot_time'].isoformat()
-                #             new_appts.append(appt)
-                #         item['appointments_today'] = new_appts
-                return result
+            params.append(f"%{search}%")
+            param_idx += 1
+
+        # Filter by location
+        if location:
+            filters.append(f"d.location ILIKE ${param_idx}")
+            params.append(f"%{location}%")
+            param_idx += 1
+
+        # Filter by minimum rating
+        if min_rating is not None:
+            filters.append(f"d.rating >= ${param_idx}")
+            params.append(min_rating)
+            param_idx += 1
+
+        # Filter by maximum rating
+        if max_rating is not None:
+            filters.append(f"d.rating <= ${param_idx}")
+            params.append(max_rating)
+            param_idx += 1
+
+        # Filter by specialty (assuming specialty is stored in title or a separate field)
+        if specialty:
+            filters.append(f"d.title ILIKE ${param_idx}")
+            params.append(f"%{specialty}%")
+            param_idx += 1
+
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+
+        # Calculate offset for pagination
+        offset = (page - 1) * page_size
+        limit = page_size
+
+        # Count query for total
+        count_query = f"""
+            SELECT COUNT(*) FROM doctors d
+            {where_clause}
+        """
+
+        # Data query with pagination
+        # Fix: Use single $-style parameter placeholders, not double $$
+        data_query = f"""
+            SELECT 
+                d.id AS doctor_id,
+                d.user_id,
+                d.first_name,
+                d.last_name,
+                d.title,
+                d.bio,
+                d.experience_years,
+                d.patients_count,
+                d.location,
+                d.rating,
+                d.profile_picture_url,
+                d.created_at,
+                (
+                    SELECT JSONB_AGG(
+                        JSONB_BUILD_OBJECT(
+                            'review_id', dr.id,
+                            'user_id', dr.user_id,
+                            'rating', dr.rating,
+                            'comment', dr.comment,
+                            'created_at', dr.created_at
+                        )
+                    )
+                    FROM doctors_reviews dr 
+                    WHERE dr.doctor_id = d.id
+                ) AS reviews,
+                (
+                    SELECT JSONB_AGG(
+                        JSONB_BUILD_OBJECT(
+                            'experience_id', de.id,
+                            'institution', de.institution,
+                            'position', de.position,
+                            'start_date', de.start_date,
+                            'end_date', de.end_date,
+                            'description', de.description,
+                            'created_at', de.created_at
+                        )
+                    )
+                    FROM doctors_experience de 
+                    WHERE de.doctor_id = d.id
+                ) AS experiences,
+                (
+                    SELECT JSONB_AGG(
+                        JSONB_BUILD_OBJECT(
+                            'slot_id', das.id,
+                            'available_at', das.available_at,
+                            'status', das.status,
+                            'created_at', das.created_at
+                        )
+                    )
+                    FROM doctor_availability_slots das 
+                    WHERE das.doctor_id = d.id
+                ) AS availability_slots,
+                (
+                    SELECT COUNT(*) 
+                    FROM appointments a 
+                    WHERE a.doctor_id = d.id 
+                    AND DATE(a.slot_time) = CURRENT_DATE
+                ) AS appointment_count_today,
+                (
+                    SELECT COUNT(DISTINCT dp.patient_id) 
+                    FROM doctors_patients dp 
+                    WHERE dp.doctor_id = d.id
+                ) AS patient_count,
+                JSONB_AGG(
+                    JSONB_BUILD_OBJECT(
+                        'appointment_id', a.id,
+                        'patient_id', a.patient_id,
+                        'slot_time', a.slot_time,
+                        'complain', a.complain,
+                        'status', a.status
+                    )
+                ) FILTER (WHERE a.id IS NOT NULL) AS appointments_today
+            FROM doctors d
+            LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = CURRENT_DATE
+            LEFT JOIN doctors_reviews dr ON d.id = dr.doctor_id
+            LEFT JOIN doctors_experience de ON d.id = de.doctor_id
+            LEFT JOIN doctors_patients dp ON d.id = dp.doctor_id
+            {where_clause}
+            GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
+            ORDER BY d.rating DESC NULLS LAST, d.created_at DESC
+            LIMIT ${param_idx} OFFSET ${param_idx + 1}
+        """
+
+        params_for_data = params.copy()
+        params_for_data.append(limit)
+        params_for_data.append(offset)
+
+        async with db.get_connection() as conn:
+            total = await conn.fetchval(count_query, *params)
+            rows = await conn.fetch(data_query, *params_for_data)
+            result = [dict(row) for row in rows] if rows else []
+            return {
+                "data": result,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            }
 
     @staticmethod
     async def get_doctor(doctor_id: int) -> dict:
