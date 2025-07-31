@@ -34,8 +34,11 @@ async def connect_websocket(websocket: WebSocket, appointment_id: int, user_id: 
         raise ValueError("Unauthorized")
 
     if appointment_id not in active_calls:
-        logger.debug(f"Creating new active_calls entry for appointment_id={appointment_id}")
-        active_calls[appointment_id] = {}
+        logger.info(f"current active call data: {active_calls}")
+        logger.debug(f"Creating new active_calls entry for appointment_id={appointment_id} with user_id={user_id}")
+        active_calls[appointment_id] = {user_id: websocket}
+        logger.info(f"after adding appointment id active call data: {active_calls}")
+
     active_calls[appointment_id][user_id] = websocket
     logger.info(f"WebSocket connected: appointment_id={appointment_id}, user_id={user_id}")
     logger.debug(f"Current active_calls: {active_calls}")
