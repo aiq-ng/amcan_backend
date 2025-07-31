@@ -288,53 +288,131 @@ class AppointmentManager:
             raise
 
     @staticmethod
-    async def get_all_appointments() -> list:
-        logger.info(f"[APPOINTMENT MANAGER] get_all_appointments called (admin)")
-        async with db.get_connection() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT 
-                    a.id AS appointment_id,
-                    a.doctor_id,
-                    a.patient_id,
-                    a.slot_time,
-                    a.complain,
-                    a.status,
-                    a.created_at,
-                    d.first_name AS doctor_first_name,
-                    d.last_name AS doctor_last_name,
-                    d.title AS doctor_title,
-                    d.bio AS doctor_bio,
-                    d.rating AS doctor_rating,
-                    d.location AS doctor_location,
-                    d.profile_picture_url AS doctor_profile_picture_url,
-                    p.first_name AS patient_first_name,
-                    p.last_name AS patient_last_name,
-                    t.therapy_type AS therapy_name,
-                    u.email AS patient_email,
-                    asumm.diagnosis,
-                    asumm.notes,
-                    asumm.prescription,
-                    asumm.follow_up_date
-                FROM appointments a
-                JOIN doctors d ON a.doctor_id = d.id
-                JOIN patients p ON a.patient_id = p.id
-                JOIN users u ON p.user_id = u.id
-                LEFT JOIN therapy t ON p.therapy_type = t.id
-                LEFT JOIN appointments_summary asumm ON a.id = asumm.id
-                ORDER BY a.slot_time DESC
-                """
+    async def get_all_appointments(
+        doctor_id: int = None,
+        patient_id: int = None,
+        status: str = None,
+        slot_time_from: datetime = None,
+        slot_time_to: datetime = None,
+        page: int = 1,
+        page_size: int = 20,
+        search: str = None,
+        created_at_from: datetime = None,
+        created_at_to: datetime = None,
+    ) -> dict:
+        """
+        Get all appointments with optional filters and pagination.
+        Returns a dict with 'data', 'total', 'page', 'page_size'.
+        """
+        logger.info(
+            f"[APPOINTMENT MANAGER] get_all_appointments called (admin) with filters: "
+            f"doctor_id={doctor_id}, patient_id={patient_id}, status={status}, "
+            f"slot_time_from={slot_time_from}, slot_time_to={slot_time_to}, "
+            f"created_at_from={created_at_from}, created_at_to={created_at_to}, "
+            f"page={page}, page_size={page_size}, search={search}"
+        )
+        filters = []
+        params = []
+        param_idx = 1
+
+        if doctor_id is not None:
+            filters.append(f"a.doctor_id = ${param_idx}")
+            params.append(doctor_id)
+            param_idx += 1
+        if patient_id is not None:
+            filters.append(f"a.patient_id = ${param_idx}")
+            params.append(patient_id)
+            param_idx += 1
+        if status is not None:
+            filters.append(f"a.status = ${param_idx}")
+            params.append(status)
+            param_idx += 1
+        if slot_time_from is not None:
+            filters.append(f"a.slot_time >= ${param_idx}")
+            params.append(slot_time_from)
+            param_idx += 1
+        if slot_time_to is not None:
+            filters.append(f"a.slot_time <= ${param_idx}")
+            params.append(slot_time_to)
+            param_idx += 1
+        if created_at_from is not None:
+            filters.append(f"a.created_at >= ${param_idx}")
+            params.append(created_at_from)
+            param_idx += 1
+        if created_at_to is not None:
+            filters.append(f"a.created_at <= ${param_idx}")
+            params.append(created_at_to)
+            param_idx += 1
+        if search:
+            # Search in doctor or patient name or complain
+            filters.append(
+                f"(d.first_name ILIKE ${param_idx} OR d.last_name ILIKE ${param_idx} "
+                f"OR p.first_name ILIKE ${param_idx} OR p.last_name ILIKE ${param_idx} "
+                f"OR a.complain ILIKE ${param_idx})"
             )
+            params.append(f"%{search}%")
+            param_idx += 1
+
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        offset = (page - 1) * page_size
+
+        # Count query for total
+        count_query = f"""
+            SELECT COUNT(*) FROM appointments a
+            JOIN doctors d ON a.doctor_id = d.id
+            JOIN patients p ON a.patient_id = p.id
+            JOIN users u ON p.user_id = u.id
+            LEFT JOIN therapy t ON p.therapy_type = t.id
+            LEFT JOIN appointments_summary asumm ON a.id = asumm.id
+            {where_clause}
+        """
+
+        # Data query with pagination
+        data_query = f"""
+            SELECT 
+                a.id AS appointment_id,
+                a.doctor_id,
+                a.patient_id,
+                a.slot_time,
+                a.complain,
+                a.status,
+                a.created_at,
+                d.first_name AS doctor_first_name,
+                d.last_name AS doctor_last_name,
+                d.title AS doctor_title,
+                d.bio AS doctor_bio,
+                d.rating AS doctor_rating,
+                d.location AS doctor_location,
+                d.profile_picture_url AS doctor_profile_picture_url,
+                p.first_name AS patient_first_name,
+                p.last_name AS patient_last_name,
+                t.therapy_type AS therapy_name,
+                u.email AS patient_email,
+                asumm.diagnosis,
+                asumm.notes,
+                asumm.prescription,
+                asumm.follow_up_date
+            FROM appointments a
+            JOIN doctors d ON a.doctor_id = d.id
+            JOIN patients p ON a.patient_id = p.id
+            JOIN users u ON p.user_id = u.id
+            LEFT JOIN therapy t ON p.therapy_type = t.id
+            LEFT JOIN appointments_summary asumm ON a.id = asumm.id
+            {where_clause}
+            ORDER BY a.slot_time DESC
+            LIMIT {page_size} OFFSET {offset}
+        """
+
+        async with db.get_connection() as conn:
+            total = await conn.fetchval(count_query, *params)
+            rows = await conn.fetch(data_query, *params)
             result = [dict(row) for row in rows]
-            # for row in result:
-            #     if 'created_at' in row and isinstance(row['created_at'], datetime):
-            #         row['created_at'] = row['created_at'].isoformat()
-            #     if 'slot_time' in row and isinstance(row['slot_time'], datetime):
-            #         row['slot_time'] = row['slot_time'].isoformat()
-            #     if 'follow_up_date' in row and isinstance(row['follow_up_date'], datetime):
-            #         row['follow_up_date'] = row['follow_up_date'].isoformat()
-            # logger.info(f"[APPOINTMENT MANAGER] Retrieved {len(rows)} appointments (admin)")
-            return result
+            return {
+                "data": result,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            }
 
     @staticmethod
     async def get_appointment_by_id(appointment_id: int, current_user: dict) -> dict:

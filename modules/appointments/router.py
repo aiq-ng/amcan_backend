@@ -55,9 +55,43 @@ async def get_patient_appointments(patient_id, current_user: dict = Depends(get_
         return {"success": False, "error": str(e), "message": "Failed to retrieve appointments"}
 
 @router.get("/all")
-async def get_all_appointments(current_admin: dict = Depends(get_current_admin)):
+async def get_all_appointments(
+    doctor_id: int = None,
+    patient_id: int = None,
+    status: str = None,
+    slot_time_from: str = None,
+    slot_time_to: str = None,
+    created_at_from: str = None,
+    created_at_to: str = None,
+    page: int = 1,
+    page_size: int = 20,
+    search: str = None,
+    current_admin: dict = Depends(get_current_admin)
+):
+    """
+    Admin endpoint to get all appointments with optional filters and pagination.
+    """
+    from datetime import datetime
+
+    # Parse datetime strings if provided
+    slot_time_from_dt = datetime.fromisoformat(slot_time_from) if slot_time_from else None
+    slot_time_to_dt = datetime.fromisoformat(slot_time_to) if slot_time_to else None
+    created_at_from_dt = datetime.fromisoformat(created_at_from) if created_at_from else None
+    created_at_to_dt = datetime.fromisoformat(created_at_to) if created_at_to else None
+
     try:
-        appointments = await AppointmentManager.get_all_appointments()
+        appointments = await AppointmentManager.get_all_appointments(
+            doctor_id=doctor_id,
+            patient_id=patient_id,
+            status=status,
+            slot_time_from=slot_time_from_dt,
+            slot_time_to=slot_time_to_dt,
+            page=page,
+            page_size=page_size,
+            search=search,
+            created_at_from=created_at_from_dt,
+            created_at_to=created_at_to_dt,
+        )
         return success_response(data=appointments, message="All appointments retrieved successfully")
     except Exception as e:
         return error_response(str(e), status_code=500)
