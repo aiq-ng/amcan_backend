@@ -136,9 +136,9 @@ async def reschedule_appointment(
         # new_slot_time_dt = new_slot_time.new_slot_time
 
         # Fetch the appointment to check if current user is the doctor, patient, or admin
-        appointment = await AppointmentManager.get_appointment_by_id(appointment_id, current_user)
-        if not appointment:
-            return error_response("Appointment not found", status_code=404)
+        # appointment = await AppointmentManager.get_appointment_by_id(appointment_id, current_user)
+        # if not appointment:
+        #     return error_response("Appointment not found", status_code=404)
 
         # Check if current user is allowed: admin, patient, or doctor in the appointment
         # is_admin = current_user.get("is_admin", False)

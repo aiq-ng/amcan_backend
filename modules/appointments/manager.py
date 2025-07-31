@@ -555,15 +555,25 @@ class AppointmentManager:
                 logger.warning(f"[APPOINTMENT MANAGER] New slot not available for doctor_id={doctor_id}, slot_time={slot_time_naive}")
                 # raise ValueError("Selected new slot is not available")
 
-                row = await conn.fetchrow(
+                # check if new slot is already in doctor_availability_slots
+                existing_slot = await conn.fetchrow(
                     """
-                    INSERT INTO doctor_availability_slots (doctor_id, available_at, status)
-                    VALUES ($1, $2, 'available')
-                    RETURNING id, doctor_id, available_at, status, created_at
+                    SELECT id FROM doctor_availability_slots
+                    WHERE available_at = $1
                     """,
-                    doctor_id,
                     slot_time_naive
-                    )
+                )
+
+                if not existing_slot:
+                    row = await conn.fetchrow(
+                        """
+                        INSERT INTO doctor_availability_slots (doctor_id, available_at, status)
+                        VALUES ($1, $2, 'available')
+                        RETURNING id, doctor_id, available_at, status, created_at
+                        """,
+                        doctor_id,
+                        slot_time_naive
+                        )
 
             # Check if new slot is already booked in appointments
             existing = await conn.fetchrow(
