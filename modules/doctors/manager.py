@@ -203,11 +203,12 @@ class DoctorManager:
             total = await conn.fetchval(count_query, *params)
             rows = await conn.fetch(data_query, *params_for_data)
             result = [dict(row) for row in rows] if rows else []
-            return {
-                "data": result,
-                "total": total,
+            meta_data = {"total": total,
                 "page": page,
-                "page_size": page_size,
+                "page_size": page_size,}
+            return {
+                "doctors": result,
+                "meta_data": meta_data,
             }
 
     @staticmethod

@@ -113,11 +113,14 @@ async def get_all_patients(
                 row['summary_updated_at'] = row['summary_updated_at'].isoformat()
             if 'follow_up_date' in row and isinstance(row['follow_up_date'], datetime):
                 row['follow_up_date'] = row['follow_up_date'].isoformat()
-        return {
-            "data": result,
+        meta_data = {
             "total": total,
             "page": page,
             "page_size": page_size,
+        }
+        return {
+            "patients": result,
+            "meta_data": meta_data,
         }
 
 async def get_patient_by_user_id(user_id: int) -> dict:

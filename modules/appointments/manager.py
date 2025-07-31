@@ -407,11 +407,12 @@ class AppointmentManager:
             total = await conn.fetchval(count_query, *params)
             rows = await conn.fetch(data_query, *params)
             result = [dict(row) for row in rows]
-            return {
-                "data": result,
-                "total": total,
+            meta_data = {"total": total,
                 "page": page,
-                "page_size": page_size,
+                "page_size": page_size,}
+            return {
+                "appointments": result,
+                "meta": meta_data,
             }
 
     @staticmethod
@@ -473,16 +474,16 @@ class AppointmentManager:
             if not appt:
                 logger.warning(f"[APPOINTMENT MANAGER] Appointment not found: {appointment_id}")
                 raise ValueError("Appointment not found")
-            # Only allow if current user is admin, the patient who booked the appointment, or the doctor in the appointment
-            is_admin = current_user.get("is_admin", False)
-            is_patient = appt["patient_id"] == current_user.get("id")
-            is_doctor = (
-                (current_user.get("doctor_id") is not None and appt["doctor_id"] == current_user.get("doctor_id"))
-                or (appt["doctor_id"] == current_user.get("id"))
-            )
-            if not (is_admin or is_patient or is_doctor):
-                logger.warning(f"[APPOINTMENT MANAGER] Unauthorized reschedule attempt for appointment_id={appointment_id} by user_id={current_user['id']}")
-                raise ValueError("Not authorized to reschedule this appointment")
+            # # Only allow if current user is admin, the patient who booked the appointment, or the doctor in the appointment
+            # is_admin = current_user.get("is_admin", False)
+            # is_patient = appt["patient_id"] == current_user.get("id")
+            # is_doctor = (
+            #     (current_user.get("doctor_id") is not None and appt["doctor_id"] == current_user.get("doctor_id"))
+            #     or (appt["doctor_id"] == current_user.get("id"))
+            # )
+            # if not (is_admin or is_patient or is_doctor):
+            #     logger.warning(f"[APPOINTMENT MANAGER] Unauthorized reschedule attempt for appointment_id={appointment_id} by user_id={current_user['id']}")
+            #     raise ValueError("Not authorized to reschedule this appointment")
             
             doctor_id = appt["doctor_id"]
             old_slot_time = appt["slot_time"]

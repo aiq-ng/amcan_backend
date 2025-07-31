@@ -92,7 +92,7 @@ async def get_all_appointments(
             created_at_from=created_at_from_dt,
             created_at_to=created_at_to_dt,
         )
-        return success_response(data=appointments, message="All appointments retrieved successfully")
+        return success_response(appointments, message="All appointments retrieved successfully")
     except Exception as e:
         return error_response(str(e), status_code=500)
 
@@ -136,7 +136,6 @@ async def reschedule_appointment(
         # new_slot_time_dt = new_slot_time.new_slot_time
 
         # Fetch the appointment to check if current user is the doctor, patient, or admin
-        from modules.appointments.manager import AppointmentManager
         appointment = await AppointmentManager.get_appointment_by_id(appointment_id, current_user)
         if not appointment:
             return error_response("Appointment not found", status_code=404)
@@ -149,7 +148,7 @@ async def reschedule_appointment(
         #     return error_response("Not authorized to reschedule this appointment", status_code=403)
 
         result = await AppointmentManager.reschedule_appointment(appointment_id, new_slot_time, current_user)
-        return success_response(data=result, message="Appointment rescheduled successfully")
+        return success_response(result, message="Appointment rescheduled successfully")
     except ValueError as e:
         return error_response(str(e), status_code=403)
     except Exception as e:
