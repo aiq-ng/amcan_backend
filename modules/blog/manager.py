@@ -40,44 +40,76 @@ async def create_blog_post(user_id: str, post_data) -> str:
         return post_id
 
 async def get_blog_posts_by_mood(user_id: str, limit: int = 5, offset: int = 0):
-    """Fetch blog posts recommended based on user's current mood."""
+    """
+    Fetch blog posts most relevant to the user's current mood.
+    The mood_relevance column is stored as JSONB, e.g.:
+    {"Sad": 0.4, "Calm": 0.9, "Angry": 0.0, "Happy": 0.3, "Manic": 0.1}
+    This function fetches posts where the current mood exists in mood_relevance and its value > 0.
+    """
     logger.debug(f"Fetching blog posts for user_id={user_id}, limit={limit}, offset={offset}")
     async with db_connection() as conn:
+        # Get the user's current mood
+        mood_query = """
+            SELECT current_mood FROM mood_recommendations
+            WHERE user_id = $1
+            ORDER BY last_updated DESC
+            LIMIT 1
+        """
+        mood_row = await fetch_one(conn, mood_query, (int(user_id),))
+        if mood_row and mood_row.get("current_mood"):
+            current_mood = mood_row["current_mood"]
+        else:
+            # If user does not have a mood, use a default mood that is likely to match (e.g., 'Happy')
+            current_mood = "Happy"
+            logger.info(f"No mood found for user_id={user_id}, using default mood '{current_mood}'")
+
+        # For debugging: log all available moods in blog_posts
+        debug_moods_query = "SELECT DISTINCT jsonb_object_keys(mood_relevance) as mood FROM blog_posts"
+        available_moods = await fetch_all(conn, debug_moods_query)
+        logger.debug(f"Available moods in blog_posts: {[row['mood'] for row in available_moods]}")
+
+        # Query for posts matching the current mood
+        # The comparison is correct: (bp.mood_relevance ? $1) checks if the mood exists as a key,
+        # and (bp.mood_relevance->>$1)::float > 0 checks if its value is greater than zero.
         query = """
             SELECT bp.id, bp.title, bp.description, bp.content_type, bp.content_url, bp.duration, bp.mood_relevance, bp.created_at, bp.user_id, bp.thumbnail_url
             FROM blog_posts bp
-            JOIN mood_recommendations mr ON mr.user_id = $1
-            WHERE (bp.mood_relevance ? mr.current_mood)
-              AND (bp.mood_relevance->>mr.current_mood)::float > 0
-              AND mr.current_mood = (
-                SELECT current_mood FROM mood_recommendations WHERE user_id = $1
-                ORDER BY last_updated DESC LIMIT 1
-              )
-            ORDER BY (bp.mood_relevance->>mr.current_mood)::float DESC
+            WHERE (bp.mood_relevance ? $1)
+              AND (bp.mood_relevance->>$1)::float > 0
+            ORDER BY (bp.mood_relevance->>$1)::float DESC
             LIMIT $2 OFFSET $3
         """
-        logger.debug(f"Executing query to fetch blog posts by mood: {query}")
-        posts = await fetch_all(conn, query, (int(user_id), limit, offset))
-        logger.info(f"Fetched {len(posts)} blog posts for user_id={user_id}")
+        logger.debug(f"Executing query to fetch blog posts by mood: {query} with mood={current_mood}")
+        posts = await fetch_all(conn, query, (current_mood, limit, offset))
+        logger.info(f"Fetched {len(posts)} blog posts for user_id={user_id} and mood={current_mood}")
+
+        # If no posts found, log all blog_posts for inspection
         if not posts:
-            logger.warning(f"No posts found for user_id={user_id} and current mood")
-            return []
+            logger.warning(f"No posts found for mood '{current_mood}'. Fetching all blog_posts for debugging.")
+            all_posts_query = """
+                SELECT id, title, mood_relevance FROM blog_posts
+                ORDER BY created_at DESC
+                LIMIT 10
+            """
+            all_posts = await fetch_all(conn, all_posts_query)
+            logger.debug(f"Sample blog_posts: {all_posts}")
+
         return [dict(post) for post in posts]
 
 async def update_user_mood(user_id: str, mood: str) -> None:
     """Update the user's current mood."""
     logger.debug(f"Updating mood for user_id={user_id} to mood={mood}")
     async with db_connection() as conn:
-        query = """
-            INSERT INTO mood_recommendations (id, user_id, current_mood)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id) DO UPDATE
-            SET current_mood = EXCLUDED.current_mood, last_updated = CURRENT_TIMESTAMP
+        # Use UPSERT to avoid duplicate key errors
+        upsert_query = """
+            INSERT INTO mood_recommendations (id, user_id, current_mood, last_updated)
+            VALUES ($1, $1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE
+            SET current_mood = EXCLUDED.current_mood,
+                last_updated = EXCLUDED.last_updated
         """
-        logger.debug(f"Executing query to update user mood: {query}")
-        await execute_query(conn, query, (f"mood_{user_id}", int(user_id), mood))
-        logger.info(f"Updated mood for user_id={user_id} to mood={mood}")
-        
+        await execute_query(conn, upsert_query, (int(user_id), mood))
+        logger.info(f"Upserted mood for user_id={user_id} to mood={mood}")
 
 
 async def get_all_blog_posts(limit: int = 20, offset: int = 0) -> List:

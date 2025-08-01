@@ -129,24 +129,7 @@ async def reschedule_appointment(
     """
     from datetime import datetime
     try:
-        # try:
-        #     new_slot_time_dt = datetime.fromisoformat(new_slot_time)
-        # except Exception:
-        #     return error_response("Invalid new_slot_time format. Use ISO format (YYYY-MM-DDTHH:MM:SS)", status_code=400)
-        # new_slot_time_dt = new_slot_time.new_slot_time
-
-        # Fetch the appointment to check if current user is the doctor, patient, or admin
-        # appointment = await AppointmentManager.get_appointment_by_id(appointment_id, current_user)
-        # if not appointment:
-        #     return error_response("Appointment not found", status_code=404)
-
-        # Check if current user is allowed: admin, patient, or doctor in the appointment
-        # is_admin = current_user.get("is_admin", False)
-        # is_patient = appointment.get("patient_id") == current_user.get("id")
-        # is_doctor = appointment.get("doctor_id") == current_user.get("doctor_id") or appointment.get("doctor_id") == current_user.get("id")
-        # if not (is_admin or is_patient or is_doctor):
-        #     return error_response("Not authorized to reschedule this appointment", status_code=403)
-
+        
         result = await AppointmentManager.reschedule_appointment(appointment_id, new_slot_time, current_user)
         return success_response(result, message="Appointment rescheduled successfully")
     except ValueError as e:
