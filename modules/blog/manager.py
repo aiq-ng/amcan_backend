@@ -68,31 +68,36 @@ async def get_blog_posts_by_mood(user_id: str, limit: int = 5, offset: int = 0):
         available_moods = await fetch_all(conn, debug_moods_query)
         logger.debug(f"Available moods in blog_posts: {[row['mood'] for row in available_moods]}")
 
+        # Check if there are any posts for the current mood
+        count_query = """
+            SELECT COUNT(*) FROM blog_posts
+            WHERE (mood_relevance ? $1)
+              AND (mood_relevance->>$1)::float > 0
+        """
+        count_row = await fetch_one(conn, count_query, (current_mood,))
+        total_posts = count_row["count"] if count_row and "count" in count_row else 0
+        logger.debug(f"Total posts for mood '{current_mood}': {total_posts}")
+
+        if total_posts == 0:
+            logger.info(f"No posts found for mood '{current_mood}'. Returning empty list.")
+            return []
+
         # Query for posts matching the current mood
-        # The comparison is correct: (bp.mood_relevance ? $1) checks if the mood exists as a key,
-        # and (bp.mood_relevance->>$1)::float > 0 checks if its value is greater than zero.
         query = """
             SELECT bp.id, bp.title, bp.description, bp.content_type, bp.content_url, bp.duration, bp.mood_relevance, bp.created_at, bp.user_id, bp.thumbnail_url
             FROM blog_posts bp
             WHERE (bp.mood_relevance ? $1)
               AND (bp.mood_relevance->>$1)::float > 0
-            ORDER BY (bp.mood_relevance->>$1)::float DESC
+            ORDER BY (bp.mood_relevance->>$1)::float DESC, bp.created_at DESC
             LIMIT $2 OFFSET $3
         """
-        logger.debug(f"Executing query to fetch blog posts by mood: {query} with mood={current_mood}")
+        logger.debug(f"Executing query to fetch blog posts by mood: {query} with mood={current_mood}, limit={limit}, offset={offset}")
         posts = await fetch_all(conn, query, (current_mood, limit, offset))
         logger.info(f"Fetched {len(posts)} blog posts for user_id={user_id} and mood={current_mood}")
 
-        # If no posts found, log all blog_posts for inspection
-        if not posts:
-            logger.warning(f"No posts found for mood '{current_mood}'. Fetching all blog_posts for debugging.")
-            all_posts_query = """
-                SELECT id, title, mood_relevance FROM blog_posts
-                ORDER BY created_at DESC
-                LIMIT 10
-            """
-            all_posts = await fetch_all(conn, all_posts_query)
-            logger.debug(f"Sample blog_posts: {all_posts}")
+        # Defensive: If limit is not respected, log a warning
+        if len(posts) > limit:
+            logger.warning(f"Fetched {len(posts)} posts, which exceeds the requested limit {limit}")
 
         return [dict(post) for post in posts]
 

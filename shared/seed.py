@@ -277,19 +277,123 @@ async def seed_data():
 
             # Seed blog posts
             logger.info("Seeding blog posts...")
-            for i in range(6):
-                category_id = categories[i % len(categories)]
+            # Ensure every mood has 1 or 2 blog posts
+            moods = ["Happy", "Calm", "Manic", "Sad", "Angry"]
+            mood_blog_posts = [
+                # Happy
+                {
+                    "title": "Finding Joy in Everyday Life",
+                    "description": "Tips to boost your happiness.",
+                    "content_type": "article",
+                    "content_url": "<p>Happiness is a journey...</p>",
+                    "thumbnail_url": "https://example.com/happy1.jpg",
+                    "duration": 300,
+                    "mood_relevance": '{"Happy": 0.95, "Calm": 0.2, "Manic": 0.0, "Sad": 0.0, "Angry": 0.0}',
+                },
+                {
+                    "title": "Celebrate Your Wins",
+                    "description": "How to recognize and celebrate your achievements.",
+                    "content_type": "video",
+                    "content_url": "https://example.com/happy2.mp4",
+                    "thumbnail_url": "https://example.com/happy2.jpg",
+                    "duration": 240,
+                    "mood_relevance": '{"Happy": 0.85, "Calm": 0.1, "Manic": 0.0, "Sad": 0.0, "Angry": 0.0}',
+                },
+                # Calm
+                {
+                    "title": "Meditation for Calmness",
+                    "description": "A guided meditation to help you relax.",
+                    "content_type": "audio",
+                    "content_url": "https://example.com/calm1.mp3",
+                    "thumbnail_url": "https://example.com/calm1.jpg",
+                    "duration": 360,
+                    "mood_relevance": '{"Happy": 0.1, "Calm": 0.95, "Manic": 0.0, "Sad": 0.0, "Angry": 0.0}',
+                },
+                {
+                    "title": "Breathing Techniques for Stress Relief",
+                    "description": "Simple breathing exercises to calm your mind.",
+                    "content_type": "article",
+                    "content_url": "<p>Try these breathing techniques...</p>",
+                    "thumbnail_url": "https://example.com/calm2.jpg",
+                    "duration": 180,
+                    "mood_relevance": '{"Happy": 0.0, "Calm": 0.9, "Manic": 0.0, "Sad": 0.0, "Angry": 0.0}',
+                },
+                # Manic
+                {
+                    "title": "Managing High Energy",
+                    "description": "How to channel manic energy productively.",
+                    "content_type": "article",
+                    "content_url": "<p>Channel your energy into positive actions...</p>",
+                    "thumbnail_url": "https://example.com/manic1.jpg",
+                    "duration": 200,
+                    "mood_relevance": '{"Happy": 0.1, "Calm": 0.0, "Manic": 0.95, "Sad": 0.0, "Angry": 0.0}',
+                },
+                {
+                    "title": "Grounding Techniques for Mania",
+                    "description": "Stay grounded during manic episodes.",
+                    "content_type": "video",
+                    "content_url": "https://example.com/manic2.mp4",
+                    "thumbnail_url": "https://example.com/manic2.jpg",
+                    "duration": 250,
+                    "mood_relevance": '{"Happy": 0.0, "Calm": 0.1, "Manic": 0.9, "Sad": 0.0, "Angry": 0.0}',
+                },
+                # Sad
+                {
+                    "title": "Coping with Sadness",
+                    "description": "Strategies to help you through sad times.",
+                    "content_type": "article",
+                    "content_url": "<p>It's okay to feel sad sometimes...</p>",
+                    "thumbnail_url": "https://example.com/sad1.jpg",
+                    "duration": 220,
+                    "mood_relevance": '{"Happy": 0.0, "Calm": 0.0, "Manic": 0.0, "Sad": 0.95, "Angry": 0.0}',
+                },
+                {
+                    "title": "Music for Sad Days",
+                    "description": "A playlist to comfort you.",
+                    "content_type": "audio",
+                    "content_url": "https://example.com/sad2.mp3",
+                    "thumbnail_url": "https://example.com/sad2.jpg",
+                    "duration": 300,
+                    "mood_relevance": '{"Happy": 0.0, "Calm": 0.1, "Manic": 0.0, "Sad": 0.9, "Angry": 0.0}',
+                },
+                # Angry
+                {
+                    "title": "Letting Go of Anger",
+                    "description": "Healthy ways to process anger.",
+                    "content_type": "article",
+                    "content_url": "<p>Anger is a normal emotion...</p>",
+                    "thumbnail_url": "https://example.com/angry1.jpg",
+                    "duration": 210,
+                    "mood_relevance": '{"Happy": 0.0, "Calm": 0.0, "Manic": 0.0, "Sad": 0.0, "Angry": 0.95}',
+                },
+                {
+                    "title": "Physical Activities to Release Anger",
+                    "description": "Channel your anger into movement.",
+                    "content_type": "video",
+                    "content_url": "https://example.com/angry2.mp4",
+                    "thumbnail_url": "https://example.com/angry2.jpg",
+                    "duration": 260,
+                    "mood_relevance": '{"Happy": 0.0, "Calm": 0.0, "Manic": 0.1, "Sad": 0.0, "Angry": 0.9}',
+                },
+            ]
+            # Assign categories and users in a round-robin fashion
+            for idx, post in enumerate(mood_blog_posts):
+                category_id = categories[idx % len(categories)]
+                user_id = patients[idx % len(patients)]
                 await conn.execute(
                     """
                     INSERT INTO blog_posts (title, category_id, description, content_type, content_url, thumbnail_url, duration, mood_relevance, user_id)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
                     """,
-                    f"Blog Post {i+1}", category_id, f"Description {i+1}",
-                    ["article", "video", "audio"][i % 3],
-                    f"<p>Content {i+1}</p>" if i % 3 == 0 else f"https://example.com/content{i+1}.{['mp4', 'mp3'][i % 2]}",
-                    f"https://example.com/thumb{i+1}.jpg", 300 if i % 3 != 0 else None,
-                    f'{{"Happy": 0.3, "Calm": 0.9, "Manic": 0.1, "Sad": 0.4, "Angry": 0.0}}',
-                    patients[i % len(patients)]
+                    post["title"],
+                    category_id,
+                    post["description"],
+                    post["content_type"],
+                    post["content_url"],
+                    post["thumbnail_url"],
+                    post["duration"],
+                    post["mood_relevance"],
+                    user_id
                 )
             logger.info("Blog posts seeded.")
 
