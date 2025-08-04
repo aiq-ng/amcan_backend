@@ -104,9 +104,16 @@ async def seed_data():
 
             # Seed doctor availability slots
             logger.info("Seeding doctor availability slots...")
+            today = datetime.now().date()
             for doctor_id in doctors:
                 for i in range(5):  # 5 slots per doctor
-                    slot_time = datetime(2025, 7, 26 + i, 9 + i % 4, 0)  # Spread out over 5 days, 9am-12pm
+                    # Each slot is on a different day in August, starting from today if today is in August, else from August 1
+                    base_august = date(today.year, 8, 1)
+                    if today.month == 8:
+                        slot_date = today + timedelta(days=i)
+                    else:
+                        slot_date = base_august + timedelta(days=i)
+                    slot_time = datetime.combine(slot_date, datetime.min.time()).replace(hour=9 + i % 4)
                     status = choice(['available', 'booked', 'expired'])
                     await conn.execute(
                         """
@@ -159,15 +166,27 @@ async def seed_data():
 
             # Seed appointments
             logger.info("Seeding appointments...")
+            # Appointments start from today (or August 1 if not August) and go into coming days in August
+            today = datetime.now().date()
+            base_august = date(today.year, 8, 1)
             for i, (doctor_id, patient_id) in enumerate(zip(doctors, patients)):
                 for j in range(5):
+                    # Calculate appointment date in August
+                    if today.month == 8:
+                        appt_date = today + timedelta(days=i*5 + j)
+                    else:
+                        appt_date = base_august + timedelta(days=i*5 + j)
+                    # Ensure we stay within August
+                    if appt_date.month != 8:
+                        break
+                    slot_time = datetime.combine(appt_date, datetime.min.time()).replace(hour=10 + j, minute=0)
                     appointment_id = await conn.fetchval(
                         """
                         INSERT INTO appointments (doctor_id, patient_id, slot_time, complain, status)
                         VALUES ($1, $2, $3, $4, $5)
                         RETURNING id
                         """,
-                        doctor_id, patient_id, datetime(2025, 7, 25 + j, 10 + j, 0, 0), f'Issue {j+1}', 'confirmed' if j % 2 == 0 else 'pending'
+                        doctor_id, patient_id, slot_time, f'Issue {j+1}', 'confirmed' if j % 2 == 0 else 'pending'
                     )
                     logger.info(f"Appointment {j+1} created with id: {appointment_id}")
 
@@ -175,6 +194,17 @@ async def seed_data():
             logger.info("Seeding appointments_summary...")
             for i, doctor_id in enumerate(doctors):
                 for j, patient_id in enumerate(patients[:3]):  # Link first 3 patients to each doctor
+                    # Follow up date in August, after appointments
+                    today = datetime.now().date()
+                    base_august = date(today.year, 8, 1)
+                    if today.month == 8:
+                        follow_up_date = today + timedelta(days=10 + i + j)
+                    else:
+                        follow_up_date = base_august + timedelta(days=10 + i + j)
+                    # Ensure we stay within August
+                    if follow_up_date.month != 8:
+                        follow_up_date = date(today.year, 8, 28)
+                    follow_up_datetime = datetime.combine(follow_up_date, datetime.min.time()).replace(hour=10)
                     await conn.execute(
                         """
                         INSERT INTO appointments_summary (doctor_id, patient_id, diagnosis, notes, prescription, follow_up_date)
@@ -184,7 +214,7 @@ async def seed_data():
                         f"Diagnosis {i + j + 1}",
                         f"Notes for patient {j + 1} with doctor {i + 1}",
                         f"Prescription {i + j + 1}: Take medication X",
-                        datetime(2025, 8, 1 + i + j, 10, 0, 0)
+                        follow_up_datetime
                     )
                 logger.info(f"Summary seeded for doctor id: {doctor_id}")
 
@@ -224,13 +254,23 @@ async def seed_data():
 
             # Seed video calls
             logger.info("Seeding video calls...")
+            today = datetime.now().date()
+            base_august = date(today.year, 8, 1)
             for i in range(5):
+                # Video call start_time in August, matching appointment logic
+                if today.month == 8:
+                    call_date = today + timedelta(days=i)
+                else:
+                    call_date = base_august + timedelta(days=i)
+                if call_date.month != 8:
+                    break
+                start_time = datetime.combine(call_date, datetime.min.time()).replace(hour=10)
                 await conn.execute(
                     """
                     INSERT INTO video_calls (appointment_id, initiator_id, receiver_id, start_time, status)
                     VALUES ($1, $2, $3, $4, $5)
                     """,
-                    i + 1, patients[i % len(patients)], doctors[i % len(doctors)], datetime(2025, 7, 25 + i, 10, 0, 0), 'initiated'
+                    i + 1, patients[i % len(patients)], doctors[i % len(doctors)], start_time, 'initiated'
                 )
             logger.info("Video calls seeded.")
 
