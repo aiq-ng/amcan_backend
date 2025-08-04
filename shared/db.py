@@ -13,7 +13,7 @@ class Database:
     async def connect(self):
         db_user = os.getenv("DB_USER", "postgres")
         db_password = os.getenv("DB_PASSWORD", "password")
-        db_name = os.getenv("DB_NAME", "amcan_db")
+        db_name = os.getenv("DB_NAME", "amcan_db_lgzh")
         db_host = os.getenv("DB_HOST", "localhost")
         db_port = int(os.getenv("DB_PORT", 5432))
 
