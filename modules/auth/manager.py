@@ -1,6 +1,6 @@
 import logging
 from .models import UserCreate
-from .utils import hash_password, verify_password, create_access_token
+from .utils import hash_password, verify_password, create_access_token, create_refresh_token, verify_refresh_token
 from shared.db import db
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class AuthManager:
             return dict(result)
 
     @staticmethod
-    async def login(email: str, password: str) -> str:
+    async def login(email: str, password: str) -> dict:
         logger.info(f"[AUTH MANAGER] login called for email and password: {email} and {password}")
         async with db.get_connection() as conn:
             user = await conn.fetchrow(
@@ -63,7 +63,44 @@ class AuthManager:
                 raise ValueError("Invalid email or password")
             logger.info(f"[AUTH MANAGER] Login successful for email: {email}")
             access_token = create_access_token(data={"sub": email})
-            return access_token
+            refresh_token = create_refresh_token(data={"sub": email})
+            return {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "expires_in": 30 * 60  # 30 minutes in seconds
+            }
+
+    @staticmethod
+    async def refresh_token(refresh_token: str) -> dict:
+        logger.info(f"[AUTH MANAGER] refresh_token called")
+        try:
+            # Verify the refresh token
+            payload = verify_refresh_token(refresh_token)
+            email = payload.get("sub")
+            
+            # Check if user still exists
+            async with db.get_connection() as conn:
+                user = await conn.fetchrow(
+                    "SELECT id, email FROM users WHERE email = $1",
+                    email
+                )
+                if not user:
+                    logger.warning(f"[AUTH MANAGER] Refresh failed: User not found for email: {email}")
+                    raise ValueError("User not found")
+                
+                logger.info(f"[AUTH MANAGER] Refresh successful for email: {email}")
+                access_token = create_access_token(data={"sub": email})
+                new_refresh_token = create_refresh_token(data={"sub": email})
+                return {
+                    "access_token": access_token,
+                    "refresh_token": new_refresh_token,
+                    "token_type": "bearer",
+                    "expires_in": 30 * 60  # 30 minutes in seconds
+                }
+        except Exception as e:
+            logger.error(f"[AUTH MANAGER] Refresh token error: {e}")
+            raise ValueError("Invalid refresh token")
 
     @staticmethod
     async def get_all_users() -> list:

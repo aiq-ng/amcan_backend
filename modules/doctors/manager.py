@@ -41,8 +41,8 @@ class DoctorManager:
             print('doctor created:', result)
 
             # Convert datetime objects to ISO format strings
-            if 'created_at' in result and isinstance(result['created_at'], datetime):
-                result['created_at'] = result['created_at'].isoformat()
+            # if 'created_at' in result and isinstance(result['created_at'], datetime):
+            #     result['created_at'] = result['created_at'].isoformat()
 
             return result
 

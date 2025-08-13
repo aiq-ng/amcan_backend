@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1200
+ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Reduced for security
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -34,18 +35,60 @@ def create_access_token(data: dict) -> str:
     logger.info(f"Creating access token for data: {data}")
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
     logger.debug(f"Token payload to encode: {to_encode}")
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     logger.debug(f"Token created: {token}")
     logger.debug("Exiting create_access_token")
     return token
 
+def create_refresh_token(data: dict) -> str:
+    logger.info(f"Creating refresh token for data: {data}")
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    logger.debug(f"Refresh token payload to encode: {to_encode}")
+    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    logger.debug(f"Refresh token created: {token}")
+    logger.debug("Exiting create_refresh_token")
+    return token
+
+def verify_refresh_token(token: str) -> dict:
+    logger.info(f"Verifying refresh token: {token}")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        logger.debug(f"Decoded refresh token payload: {payload}")
+        
+        # Check if it's a refresh token
+        if payload.get("type") != "refresh":
+            logger.warning("Token is not a refresh token")
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        
+        email: str = payload.get("sub")
+        if email is None:
+            logger.warning("Refresh token does not contain 'sub' (email)")
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        logger.info(f"Refresh token verified for email: {email}")
+        return payload
+    except jwt.ExpiredSignatureError:
+        logger.warning("Refresh token has expired")
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.PyJWTError as e:
+        logger.error(f"JWT decode error for refresh token: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     logger.info(f"Entered get_current_user with token: {token}")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         logger.debug(f"Decoded JWT payload: {payload}")
+        
+        # Check if it's an access token
+        if payload.get("type") != "access":
+            logger.warning("Token is not an access token")
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        
         email: str = payload.get("sub")
         if email is None:
             logger.warning("Token does not contain 'sub' (email)")
@@ -117,7 +160,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                         SELECT JSONB_AGG(
                             JSONB_BUILD_OBJECT(
                                 'review_id', dr.id,
-                                'user_id', dr.user_id,
                                 'rating', dr.rating,
                                 'comment', dr.comment,
                                 'created_at', dr.created_at
@@ -199,6 +241,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             logger.info(f"User found: {dict(user)}")
             logger.debug("Exiting get_current_user successfully")
             return dict(patient)
+    except jwt.ExpiredSignatureError:
+        logger.warning("Access token has expired")
+        raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.PyJWTError as e:
         logger.error(f"JWT decode error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")

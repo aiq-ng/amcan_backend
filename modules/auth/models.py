@@ -33,3 +33,12 @@ class UserUpdate(BaseModel):
     is_admin: Optional[bool] = None
     is_doctor: Optional[bool] = None
 
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+

@@ -63,7 +63,7 @@ async def get_patients(
             created_at_from=created_at_from_dt,
             created_at_to=created_at_to_dt,
         )
-        if not patients or not patients.get("data"):
+        if not patients:
             raise HTTPException(status_code=404, detail="No patients found")
         return success_response(message="Patients fetched successfully", data=patients)
     except HTTPException:

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
-from .models import UserCreate, UserResponse, UserUpdate
+from .models import UserCreate, UserResponse, UserUpdate, TokenResponse, RefreshTokenRequest
 from .manager import AuthManager
 from .utils import get_current_admin, get_current_user
 from shared.response import success_response, error_response
@@ -22,12 +22,20 @@ async def register(user: UserCreate):
 
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-
     try:
-        token = await AuthManager.login(form_data.username, form_data.password)
-        return success_response(data={"access_token": token, "token_type": "bearer"})
+        token_data = await AuthManager.login(form_data.username, form_data.password)
+        return success_response(data=token_data, message="Login successful")
     except ValueError as e:
         print(f"[AUTH] /login error: {e}")
+        return error_response(str(e), status_code=401)
+
+@router.post("/refresh")
+async def refresh_token(refresh_request: RefreshTokenRequest):
+    try:
+        token_data = await AuthManager.refresh_token(refresh_request.refresh_token)
+        return success_response(data=token_data, message="Token refreshed successfully")
+    except ValueError as e:
+        print(f"[AUTH] /refresh error: {e}")
         return error_response(str(e), status_code=401)
 
 @router.get("/me")
