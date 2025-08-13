@@ -34,6 +34,19 @@ async def create_tables():
                 emergency_contact_name VARCHAR(100),
                 emergency_contact_phone VARCHAR(20),
                 marital_status VARCHAR(20) CHECK (marital_status IN ('Single', 'Married', 'Divorced', 'Widowed')),
+                account_type VARCHAR(20) DEFAULT 'unsubscribed' CHECK (account_type IN ('subscribed', 'unsubscribed')),
+                session_count INTEGER DEFAULT 0,
+                account_status VARCHAR(20) DEFAULT 'active' CHECK (account_status IN ('active', 'inactive', 'new patient')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS subscription (
+                id SERIAL PRIMARY KEY,
+                patient_id INTEGER REFERENCES patients(id),
+                plan_name VARCHAR(100) NOT NULL,
+                start_date DATE NOT NULL,
+                end_date DATE,
+                status VARCHAR(20) CHECK (status IN ('active', 'inactive', 'cancelled')) DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 

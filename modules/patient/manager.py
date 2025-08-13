@@ -69,25 +69,41 @@ async def get_all_patients(
             p.address,
             p.phone_number,
             p.occupation,
-            p.therapy_type,
             p.therapy_criticality,
             p.emergency_contact_name,
             p.emergency_contact_phone,
             p.marital_status,
             p.profile_image_url,
             p.created_at,
-            asumm.id AS summary_id,
-            asumm.diagnosis,
-            asumm.notes,
-            asumm.prescription,
-            asumm.follow_up_date,
-            asumm.created_at AS summary_created_at,
-            asumm.updated_at AS summary_updated_at,
-            t.therapy_type AS therapy_name
+            p.account_type,
+            p.session_count,
+            t.therapy_type,
+            COALESCE(
+                json_agg(
+                    jsonb_build_object(
+                        'notes', asumm.notes
+                    )
+                ) FILTER (WHERE asumm.id IS NOT NULL), '[]'
+            ) AS appointment_notes,
+
+            COALESCE(
+                    json_agg(
+                        jsonb_build_object(
+                            'summary_id', asumm.id,
+                            'diagnosis', asumm.diagnosis,
+                            'next_appointment_date', asumm.follow_up_date,
+                            'summary_created_at', asumm.created_at,
+                        )
+                    ) FILTER (WHERE asumm.id IS NOT NULL), '[]'
+                ) AS appointment_history
         FROM patients p
         LEFT JOIN appointments_summary asumm ON p.user_id = asumm.patient_id
         LEFT JOIN therapy t ON p.therapy_type = t.id
         {where_clause}
+        GROUP BY 
+            p.id, p.user_id, p.first_name, p.last_name, p.date_of_birth, p.address, p.phone_number, 
+            p.occupation, p.therapy_criticality, p.emergency_contact_name, p.emergency_contact_phone, 
+            p.marital_status, p.profile_image_url, p.created_at, p.account_type, p.session_count, t.therapy_type
         ORDER BY p.id
         LIMIT ${param_idx} OFFSET ${param_idx + 1}
     """
@@ -136,14 +152,15 @@ async def get_patient_by_user_id(user_id: int) -> dict:
                 p.address,
                 p.phone_number,
                 p.occupation,
-                p.therapy_type,
                 p.therapy_criticality,
                 p.emergency_contact_name,
                 p.emergency_contact_phone,
                 p.marital_status,
                 p.profile_image_url,
+                p.account_type,
+                p.session_count,
                 p.created_at,
-                t.therapy_type AS therapy_name
+                t.therapy_type 
             FROM patients p
             LEFT JOIN therapy t ON p.therapy_type = t.id
             WHERE p.user_id = $1
@@ -165,34 +182,58 @@ async def get_patient_using_id(patient_id: int) -> dict:
     async with db.get_connection() as conn:
         row = await conn.fetchrow(
             """
-            SELECT 
-                p.id AS patient_id,
-                p.user_id,
-                p.first_name,
-                p.last_name,
-                p.date_of_birth,
-                p.address,
-                p.phone_number,
-                p.occupation,
-                p.therapy_type,
-                p.therapy_criticality,
-                p.emergency_contact_name,
-                p.emergency_contact_phone,
-                p.marital_status,
-                p.profile_image_url,
-                p.created_at,
-                asumm.id AS summary_id,
-                asumm.diagnosis,
-                asumm.notes,
-                asumm.prescription,
-                asumm.follow_up_date,
-                asumm.created_at AS summary_created_at,
-                asumm.updated_at AS summary_updated_at,
-                t.therapy_type AS therapy_name
-            FROM patients p
-            LEFT JOIN appointments_summary asumm ON p.user_id = asumm.patient_id
-            LEFT JOIN therapy t ON p.therapy_type = t.id
-            WHERE p.id = $1
+                SELECT 
+                    p.id AS patient_id,
+                    p.user_id,
+                    p.first_name,
+                    p.last_name,
+                    p.date_of_birth,
+                    -- Calculate age using date_of_birth
+                    EXTRACT(YEAR FROM AGE(CURRENT_DATE, p.date_of_birth))::int AS age,
+                    p.address,
+                    p.phone_number,
+                    p.occupation,
+                    p.therapy_criticality,
+                    p.emergency_contact_name,
+                    p.emergency_contact_phone,
+                    p.marital_status,
+                    p.profile_image_url,
+                    p.created_at,
+                    p.account_type,
+                    p.session_count,
+                    t.therapy_type,
+                    COALESCE(
+                        json_agg(
+                            jsonb_build_object(
+                                'notes', asumm.notes
+                            )
+                        ) FILTER (WHERE asumm.id IS NOT NULL), '[]'
+                    ) AS appointment_notes,
+                    COALESCE(
+                        json_agg(
+                            jsonb_build_object(
+                                'appointment_id', a.id,
+                                'doctor_id', a.doctor_id,
+                                'doctor_first_name', d.first_name,
+                                'doctor_last_name', d.last_name,
+                                'slot_time', a.slot_time,
+                                'complain', a.complain,
+                                'status', a.status,
+                                'created_at', a.created_at
+                            )
+                        ) FILTER (WHERE a.id IS NOT NULL), '[]'
+                    ) AS appointment_history
+                FROM patients p
+                LEFT JOIN appointments_summary asumm ON p.user_id = asumm.patient_id
+                LEFT JOIN therapy t ON p.therapy_type = t.id
+                LEFT JOIN appointments a ON p.user_id = a.patient_id
+                LEFT JOIN doctors d ON a.doctor_id = d.id
+                WHERE p.id = $1
+                GROUP BY 
+                    p.id, p.user_id, p.first_name, p.last_name, p.date_of_birth, p.address, 
+                    p.phone_number, p.occupation, p.therapy_criticality, p.emergency_contact_name, 
+                    p.emergency_contact_phone, p.marital_status, p.profile_image_url, p.created_at, 
+                    p.account_type, p.session_count, t.therapy_type
             """,
             patient_id
         )
