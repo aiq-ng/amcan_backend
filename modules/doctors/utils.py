@@ -53,7 +53,7 @@ async def get_weekly_appointment_stats(doctor_id: int) -> dict:
             dow = int(row['dow'])
             if dow in weekday_map:
                 weekly_state[weekday_map[dow]] = row['count']
-        return {"weekly_state": weekly_state}
+        return weekly_state
 
 
 
