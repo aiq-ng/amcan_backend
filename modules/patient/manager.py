@@ -4,6 +4,7 @@ from modules.auth.utils import get_current_user, hash_password
 from .models import PatientCreate, PatientUpdate, PatientResponse
 from modules.appointments.models import AppointmentResponse
 from datetime import datetime
+from .utils import get_patient_stats
 
 logger = logging.getLogger(__name__)
 
@@ -134,8 +135,10 @@ async def get_all_patients(
             "page": page,
             "page_size": page_size,
         }
+        stats = await get_patient_stats()
         return {
             "patients": result,
+            "pateint_stats": stats,
             "meta_data": meta_data,
         }
 

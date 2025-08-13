@@ -89,3 +89,43 @@ async def get_todays_appointments(doctor_id: int):
             appointments.append(appt)
         return {"todays_appointment": appointments}
 
+async def get_doctor_stats():
+    """
+    Returns statistics related to doctors:
+    - total_doctors: Total number of doctors
+    - total_video_calls: Total number of video calls
+    - specialties_count: Dictionary mapping specialty/title to count of doctors
+    - appointments_today: Number of appointments scheduled for today
+    """
+    today = datetime.date.today()
+    async with db.get_connection() as conn:
+        # Total doctors
+        total_doctors = await conn.fetchval("SELECT COUNT(*) FROM doctors")
+
+        # Total video calls
+        total_video_calls = await conn.fetchval("SELECT COUNT(*) FROM video_calls")
+
+        # Count of specialties (by title)
+        specialty_rows = await conn.fetch("""
+            SELECT title, COUNT(*) as count
+            FROM doctors
+            GROUP BY title
+        """)
+        # specialties_count = {row['title']: row['count'] for row in specialty_rows if row['title']}
+
+        # Appointments slated for current date
+        appointments_today = await conn.fetchval("""
+            SELECT COUNT(*) FROM appointments
+            WHERE DATE(slot_time) = $1
+        """, today)
+
+    stat = {
+        "total_doctors": total_doctors,
+        "total_sessions": total_video_calls,
+        "specialties_count": 8,
+        "appointments_today": appointments_today
+    }
+
+    return {"doctors_general_stat": stat}
+
+

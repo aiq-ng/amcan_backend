@@ -1,6 +1,6 @@
 from .models import DoctorCreate, DoctorResponse
 from shared.db import db
-from .utils import get_todays_appointments, get_weekly_appointment_stats
+from .utils import get_todays_appointments, get_weekly_appointment_stats, get_doctor_stats  
 import datetime
 
 class DoctorManager:
@@ -208,9 +208,11 @@ class DoctorManager:
             meta_data = {"total": total,
                 "page": page,
                 "page_size": page_size,}
+            stats = await get_doctor_stats()
             return {
                 "doctors": result,
-                "meta_data": meta_data,
+                "doctors_stats": stats,
+                "meta_data": meta_data
             }
 
     @staticmethod
