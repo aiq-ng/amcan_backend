@@ -1,9 +1,11 @@
 from .models import DoctorCreate, DoctorResponse
 from shared.db import db
+from .utils import get_todays_appointments, get_weekly_appointment_stats
 import datetime
 
 class DoctorManager:
-    
+
+  
     @staticmethod
     async def create_doctor(doctor_item: DoctorCreate, user_id: int) -> dict:
         print('creating doctor hit')
@@ -119,62 +121,65 @@ class DoctorManager:
                 d.title,
                 d.bio,
                 d.experience_years,
-                d.patients_count,
                 d.location,
+                d.account_type,
                 d.rating,
                 d.profile_picture_url,
                 d.created_at,
                 (
                     SELECT JSONB_AGG(
                         JSONB_BUILD_OBJECT(
-                            'review_id', dr.id,
-                            'user_id', dr.user_id,
-                            'rating', dr.rating,
-                            'comment', dr.comment,
-                            'created_at', dr.created_at
+                            'review_id', dr2.id,
+                            'user_id', dr2.user_id,
+                            'rating', dr2.rating,
+                            'comment', dr2.comment,
+                            'created_at', dr2.created_at
                         )
                     )
-                    FROM doctors_reviews dr 
-                    WHERE dr.doctor_id = d.id
+                    FROM doctors_reviews dr2 
+                    WHERE dr2.doctor_id = d.id
                 ) AS reviews,
                 (
                     SELECT JSONB_AGG(
                         JSONB_BUILD_OBJECT(
-                            'experience_id', de.id,
-                            'institution', de.institution,
-                            'position', de.position,
-                            'start_date', de.start_date,
-                            'end_date', de.end_date,
-                            'description', de.description,
-                            'created_at', de.created_at
+                            'experience_id', de2.id,
+                            'institution', de2.institution,
+                            'position', de2.position,
+                            'start_date', de2.start_date,
+                            'end_date', de2.end_date,
+                            'description', de2.description,
+                            'created_at', de2.created_at
                         )
                     )
-                    FROM doctors_experience de 
-                    WHERE de.doctor_id = d.id
+                    FROM doctors_experience de2 
+                    WHERE de2.doctor_id = d.id
                 ) AS experiences,
                 (
                     SELECT JSONB_AGG(
                         JSONB_BUILD_OBJECT(
-                            'slot_id', das.id,
-                            'available_at', das.available_at,
-                            'status', das.status,
-                            'created_at', das.created_at
+                            'slot_id', das2.id,
+                            'available_at', das2.available_at,
+                            'status', das2.status,
+                            'created_at', das2.created_at
                         )
                     )
-                    FROM doctor_availability_slots das 
-                    WHERE das.doctor_id = d.id
+                    FROM doctor_availability_slots das2 
+                    WHERE das2.doctor_id = d.id
                 ) AS availability_slots,
+                -- Appointment count for current date
                 (
                     SELECT COUNT(*) 
-                    FROM appointments a 
-                    WHERE a.doctor_id = d.id 
-                    AND DATE(a.slot_time) = CURRENT_DATE
+                    FROM appointments a2 
+                    WHERE a2.doctor_id = d.id 
+                    AND DATE(a2.slot_time) = CURRENT_DATE
                 ) AS appointment_count_today,
+                -- Patient count from doctors_patients table
                 (
-                    SELECT COUNT(DISTINCT dp.patient_id) 
-                    FROM doctors_patients dp 
-                    WHERE dp.doctor_id = d.id
+                    SELECT COUNT(DISTINCT dp2.patient_id) 
+                    FROM doctors_patients dp2 
+                    WHERE dp2.doctor_id = d.id
                 ) AS patient_count,
+                -- List of today's appointments
                 JSONB_AGG(
                     JSONB_BUILD_OBJECT(
                         'appointment_id', a.id,
@@ -186,11 +191,8 @@ class DoctorManager:
                 ) FILTER (WHERE a.id IS NOT NULL) AS appointments_today
             FROM doctors d
             LEFT JOIN appointments a ON d.id = a.doctor_id AND DATE(a.slot_time) = CURRENT_DATE
-            LEFT JOIN doctors_reviews dr ON d.id = dr.doctor_id
-            LEFT JOIN doctors_experience de ON d.id = de.doctor_id
-            LEFT JOIN doctors_patients dp ON d.id = dp.doctor_id
             {where_clause}
-            GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.patients_count, d.location, d.rating, d.profile_picture_url, d.created_at
+            GROUP BY d.id, d.user_id, d.first_name, d.last_name, d.title, d.bio, d.experience_years, d.location, d.rating, d.profile_picture_url, d.created_at
             ORDER BY d.rating DESC NULLS LAST, d.created_at DESC
             LIMIT ${param_idx} OFFSET ${param_idx + 1}
         """
@@ -224,7 +226,6 @@ class DoctorManager:
                     d.title,
                     d.bio,
                     d.experience_years,
-                    d.patients_count,
                     d.location,
                     d.rating,
                     d.profile_picture_url,
@@ -280,6 +281,19 @@ class DoctorManager:
                         FROM doctors_patients dp 
                         WHERE dp.doctor_id = d.id
                     ) AS patient_count,
+                    (
+                        SELECT COUNT(DISTINCT dp_new.patient_id)
+                        FROM doctors_patients dp_new
+                        JOIN patients p ON dp_new.patient_id = p.id
+                        WHERE dp_new.doctor_id = d.id
+                        AND p.account_type = 'new patient'
+                    ) AS new_patient_count,
+                    (
+                        SELECT COUNT(*)
+                        FROM appointments_summary asumm
+                        WHERE asumm.doctor_id = d.id
+                        AND asumm.follow_up_date IS NOT NULL
+                    ) AS follow_up_appointment_count,
                     JSONB_AGG(
                         JSONB_BUILD_OBJECT(
                             'appointment_id', a.id,
@@ -301,6 +315,11 @@ class DoctorManager:
             )
             if row:
                 result = dict(row)
+
+                result['todays_appointment'] = await get_todays_appointments(doctor_id)
+                result['weekly_state'] = await get_weekly_appointment_stats(doctor_id)
+
+            
                 # Convert datetime objects to ISO format strings
                 # if 'created_at' in result and isinstance(result['created_at'], datetime):
                 #     result['created_at'] = result['created_at'].isoformat()

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Depends
-router = APIRouter(prefix="/patients", tags=["patients"])
 from .models import PatientCreate, PatientUpdate, PatientResponse
 from .manager import get_patient_by_user_id, create_patient, update_patient, delete_patient, get_all_patients, get_patient_using_id
 from modules.auth.utils import get_current_user
@@ -7,20 +6,27 @@ from shared.response import success_response
 
 router = APIRouter()
 
+# NOTE: 307 Temporary Redirect is most commonly caused in FastAPI when you define a route with a trailing slash ("/") 
+# and then access it without the slash (or vice versa). FastAPI will redirect you to the canonical path, causing a 307.
+# For example, if you define @router.get('/') and access /patients (no slash), you get a 307 redirect to /patients/.
+# To avoid this, either:
+#   - Always use one style (with or without trailing slash) in both your route definitions and your client requests.
+#   - Or, define both versions if you want to support both.
+# In this file, you have @router.get('/') and @router.post('/'), which will cause 307 if you access /patients (no slash).
+# The best practice is to use no trailing slash for API endpoints (e.g., @router.get('')).
 
-@router.post("/")
+from datetime import datetime
+
+@router.post("")
 async def create_patient_endpoint(patient_data: PatientCreate, current_user: dict = Depends(get_current_user)):
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
     patient = await create_patient(patient_data)
-   
     if not patient:
         raise HTTPException(status_code=500, detail="Failed to create patient")
     return patient
 
-from datetime import datetime
-
-@router.get('/')
+@router.get("")
 async def get_patients(
     page: int = 1,
     page_size: int = 10,
@@ -38,7 +44,6 @@ async def get_patients(
         filters = {}
         created_at_from_dt = None
         created_at_to_dt = None
-
 
         if therapy_criticality is not None:
             filters['therapy_criticality'] = therapy_criticality

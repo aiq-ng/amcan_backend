@@ -61,6 +61,7 @@ async def create_tables():
                 patients_count INTEGER,
                 location VARCHAR(100),
                 rating DECIMAL(3,1) DEFAULT 0.0,
+                account_type VARCHAR(20) DEFAULT 'active' CHECK (account_type IN ('active', 'inactive', 'new doctor')),
                 profile_picture_url VARCHAR(255), -- URL to the doctor's profile picture
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -200,6 +201,15 @@ async def create_tables():
                 mood_relevance JSONB, -- e.g., {"Happy": 0.8, "Calm": 0.5} for relevance scores
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 user_id INTEGER NOT NULL REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS doctor_patient_relationships (
+                id SERIAL PRIMARY KEY,
+                doctor_id INTEGER NOT NULL REFERENCES users(id),
+                patient_id INTEGER NOT NULL REFERENCES users(id),
+                relationship_status VARCHAR(20) DEFAULT 'active' CHECK (relationship_status IN ('active', 'inactive', 'ended')),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS mood_recommendations (

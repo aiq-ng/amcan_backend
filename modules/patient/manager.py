@@ -92,7 +92,7 @@ async def get_all_patients(
                             'summary_id', asumm.id,
                             'diagnosis', asumm.diagnosis,
                             'next_appointment_date', asumm.follow_up_date,
-                            'summary_created_at', asumm.created_at,
+                            'summary_created_at', asumm.created_at
                         )
                     ) FILTER (WHERE asumm.id IS NOT NULL), '[]'
                 ) AS appointment_history
