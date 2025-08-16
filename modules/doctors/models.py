@@ -8,15 +8,17 @@ class Availability(BaseModel):
     slots: List[str]
 
 class DoctorCreate(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
     title: str
     bio: str
     experience_years: int
     first_name: str
     last_name: str
+    email: str
     patients_count: int
     profile_picture_url: str
     location: str
+    password: str
 
 class DoctorResponse(BaseModel):
     id: int

@@ -84,7 +84,7 @@ async def get_patient_by_user(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Patient not found")
     return patient
 
-@router.get('/{patient_id}')
+@router.get("/{patient_id}")
 async def get_patient_by_patient_id(patient_id: int, current_user: dict = Depends(get_current_user)):
     patient = await get_patient_using_id(patient_id)
     if not patient:

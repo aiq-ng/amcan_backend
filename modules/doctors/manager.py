@@ -2,16 +2,32 @@ from .models import DoctorCreate, DoctorResponse
 from shared.db import db
 from .utils import get_todays_appointments, get_weekly_appointment_stats, get_doctor_stats  
 import datetime
+from modules.auth.utils import get_current_user, hash_password
+
 
 class DoctorManager:
 
   
     @staticmethod
-    async def create_doctor(doctor_item: DoctorCreate, user_id: int) -> dict:
+    async def create_doctor(doctor_item: DoctorCreate) -> dict:
         print('creating doctor hit')
 
+        password_hash = hash_password(doctor_item.password)
+
+
         async with db.get_connection() as conn:
-            # Insert into doctors table
+            # 1. Create a new user and get the user_id
+            user_id = await conn.fetchval(
+                """
+                INSERT INTO users (email, password_hash, is_doctor)
+                VALUES ($1, $2, TRUE)
+                RETURNING id
+                """,
+                doctor_item.email,
+                password_hash  # Assumes password_hash is already hashed
+            )
+
+            # 2. Insert into doctors table using the new user_id
             row = await conn.fetchrow(
                 """
                 INSERT INTO doctors (user_id, first_name, last_name, title, bio, experience_years, patients_count, location, profile_picture_url)
