@@ -40,15 +40,34 @@ async def create_tables():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
-            CREATE TABLE IF NOT EXISTS subscription (
+            CREATE TABLE IF NOT EXISTS subscription_plans (
                 id SERIAL PRIMARY KEY,
-                patient_id INTEGER REFERENCES patients(id),
-                plan_name VARCHAR(100) NOT NULL,
-                start_date DATE NOT NULL,
-                end_date DATE,
-                status VARCHAR(20) CHECK (status IN ('active', 'inactive', 'cancelled')) DEFAULT 'active',
+                name VARCHAR(255) NOT NULL,
+                type VARCHAR(50) NOT NULL CHECK (type IN ('basic', 'premium', 'enterprise')),
+                price DECIMAL(10,2) NOT NULL,
+                currency VARCHAR(3) DEFAULT 'USD',
+                duration_days INTEGER NOT NULL,
+                features TEXT[],
+                is_active BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                plan_id INTEGER REFERENCES subscription_plans(id),
+                subscription_type VARCHAR(50) NOT NULL CHECK (subscription_type IN ('basic', 'premium', 'enterprise')),
+                status VARCHAR(20) NOT NULL CHECK (status IN ('active', 'inactive', 'expired', 'cancelled', 'pending')) DEFAULT 'active',
+                start_date TIMESTAMP NOT NULL,
+                end_date TIMESTAMP,
+                auto_renew BOOLEAN DEFAULT TRUE,
+                payment_method VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Legacy subscription table (keeping for backward compatibility)
+          
 
             CREATE TABLE IF NOT EXISTS doctors (
                 id SERIAL PRIMARY KEY,
@@ -218,5 +237,45 @@ async def create_tables():
                 current_mood VARCHAR(50) NOT NULL CHECK (current_mood IN ('Happy', 'Calm', 'Manic', 'Sad', 'Angry')),
                 last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                notification_type VARCHAR(50) NOT NULL CHECK (notification_type IN ('appointment', 'subscription', 'system', 'reminder', 'alert', 'message')),
+                status VARCHAR(20) NOT NULL CHECK (status IN ('unread', 'read', 'archived')) DEFAULT 'unread',
+                priority VARCHAR(20) NOT NULL CHECK (priority IN ('low', 'medium', 'high', 'urgent')) DEFAULT 'medium',
+                data JSONB,
+                read_at TIMESTAMP,
+                scheduled_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+                email_notifications BOOLEAN DEFAULT TRUE,
+                push_notifications BOOLEAN DEFAULT TRUE,
+                sms_notifications BOOLEAN DEFAULT FALSE,
+                appointment_reminders BOOLEAN DEFAULT TRUE,
+                subscription_alerts BOOLEAN DEFAULT TRUE,
+                system_notifications BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Create indexes for better performance
+            CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+            CREATE INDEX IF NOT EXISTS idx_subscriptions_end_date ON subscriptions(end_date);
+            CREATE INDEX IF NOT EXISTS idx_subscription_plans_type ON subscription_plans(type);
+            CREATE INDEX IF NOT EXISTS idx_subscription_plans_active ON subscription_plans(is_active);
+            
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+            CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
+            CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(notification_type);
+            CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+            CREATE INDEX IF NOT EXISTS idx_notifications_scheduled_at ON notifications(scheduled_at);
 
             """)

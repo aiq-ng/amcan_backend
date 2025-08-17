@@ -3,21 +3,19 @@ from modules.auth.utils import hash_password
 from datetime import datetime, date, timedelta
 import logging
 from random import randint, choice
+import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def seed_data():
     async with db.get_connection() as conn:
-        logger.info("Checking if users table is empty...")
-        count = await conn.fetchval("SELECT COUNT(*) FROM users")
-        if count == 0:
-            logger.info("No users found. Seeding data...")
-
-            # Seed therapy types
+        # --- Seed therapy types ---
+        therapy_count = await conn.fetchval("SELECT COUNT(*) FROM therapy")
+        therapy_ids = []
+        if therapy_count == 0:
             logger.info("Seeding therapy types...")
             therapy_types = ["Psychotherapy", "Physical Therapy", "Occupational Therapy", "Speech Therapy"]
-            therapy_ids = []
             for therapy_type in therapy_types:
                 therapy_id = await conn.fetchval(
                     """
@@ -29,8 +27,15 @@ async def seed_data():
                 )
                 therapy_ids.append(therapy_id)
                 logger.info(f"Therapy type {therapy_type} created with id: {therapy_id}")
+        else:
+            logger.info("Therapy types already exist. Skipping seeding.")
+            # Fetch existing therapy ids for downstream use
+            therapy_ids = [row['id'] for row in await conn.fetch("SELECT id FROM therapy ORDER BY id")]
 
-            # Seed admin user
+        # --- Seed admin user ---
+        users_count = await conn.fetchval("SELECT COUNT(*) FROM users")
+        admin_id = None
+        if users_count == 0:
             logger.info("Seeding admin user...")
             password_hash = hash_password("Admin123!")
             admin_id = await conn.fetchval(
@@ -42,10 +47,16 @@ async def seed_data():
                 "admin@therapyapp.com", password_hash, True
             )
             logger.info(f"Admin user created with id: {admin_id}")
+        else:
+            logger.info("Users already exist. Skipping admin user seeding.")
+            # Fetch admin id for downstream use if needed
+            admin_id = await conn.fetchval("SELECT id FROM users WHERE is_admin = true LIMIT 1")
 
-            # Seed multiple patients
+        # --- Seed patients ---
+        patients_count = await conn.fetchval("SELECT COUNT(*) FROM patients")
+        patients = []
+        if patients_count == 0:
             logger.info("Seeding patients...")
-            patients = []
             patient_data = [
                 ("patient1@therapyapp.com", "Patient123!", "Jane", "Doe", date(1990, 5, 15), '123 Main St, Kaduna', '+2348012345678', 'Teacher', therapy_ids[0], 'High', 'John Doe', '+2348098765432', 'Single'),
                 ("patient2@therapyapp.com", "Patient456!", "Ali", "Bello", date(1985, 9, 22), '456 Lagos Rd, Lagos', '+2348076543210', 'Engineer', therapy_ids[1], 'Medium', 'Fatima Bello', '+2348081234567', 'Married'),
@@ -71,10 +82,16 @@ async def seed_data():
                 )
                 patients.append(patient_id)
                 logger.info(f"Patient {fname} {lname} created with id: {patient_id}")
+        else:
+            logger.info("Patients already exist. Skipping seeding.")
+            # Fetch existing patient user_ids for downstream use
+            patients = [row['user_id'] for row in await conn.fetch("SELECT user_id FROM patients ORDER BY id")]
 
-            # Seed multiple doctors
+        # --- Seed doctors ---
+        doctors_count = await conn.fetchval("SELECT COUNT(*) FROM doctors")
+        doctors = []
+        if doctors_count == 0:
             logger.info("Seeding doctors...")
-            doctors = []
             doctor_data = [
                 ("doctor1@therapyapp.com", "Doctor123!", "Abimbola", "Taofeek", "Psychologist", 6, 120, "Kaduna", "https://example.com/doctor1.jpg"),
                 ("doctor2@therapyapp.com", "Doctor456!", "Aisha", "Mohammed", "Therapist", 8, 150, "Lagos", "https://example.com/doctor2.jpg"),
@@ -101,13 +118,18 @@ async def seed_data():
                 )
                 doctors.append(doctor_id)
                 logger.info(f"Doctor {fname} {lname} created with id: {doctor_id}")
+        else:
+            logger.info("Doctors already exist. Skipping seeding.")
+            # Fetch existing doctor ids for downstream use
+            doctors = [row['id'] for row in await conn.fetch("SELECT id FROM doctors ORDER BY id")]
 
-            # Seed doctor availability slots
+        # --- Seed doctor availability slots ---
+        slots_count = await conn.fetchval("SELECT COUNT(*) FROM doctor_availability_slots")
+        if slots_count == 0:
             logger.info("Seeding doctor availability slots...")
             today = datetime.now().date()
             for doctor_id in doctors:
                 for i in range(5):  # 5 slots per doctor
-                    # Each slot is on a different day in August, starting from today if today is in August, else from August 1
                     base_august = date(today.year, 8, 1)
                     if today.month == 8:
                         slot_date = today + timedelta(days=i)
@@ -123,8 +145,12 @@ async def seed_data():
                         doctor_id, slot_time, status
                     )
                 logger.info(f"Availability slots seeded for doctor id: {doctor_id}")
+        else:
+            logger.info("Doctor availability slots already exist. Skipping seeding.")
 
-            # Seed doctor experiences
+        # --- Seed doctor experiences ---
+        experience_count = await conn.fetchval("SELECT COUNT(*) FROM doctors_experience")
+        if experience_count == 0:
             logger.info("Seeding doctor experiences...")
             for i, doctor_id in enumerate(doctors):
                 for j in range(5):
@@ -137,8 +163,12 @@ async def seed_data():
                         f"Experience in role {j+1}"
                     )
                 logger.info(f"Experiences seeded for doctor id: {doctor_id}")
+        else:
+            logger.info("Doctor experiences already exist. Skipping seeding.")
 
-            # Seed doctor reviews
+        # --- Seed doctor reviews ---
+        reviews_count = await conn.fetchval("SELECT COUNT(*) FROM doctors_reviews")
+        if reviews_count == 0:
             logger.info("Seeding doctor reviews...")
             for doctor_id in doctors:
                 for i in range(5):
@@ -150,8 +180,12 @@ async def seed_data():
                         doctor_id, patients[i % len(patients)], 4 + i % 2, f"Review {i+1} for doctor"
                     )
                 logger.info(f"Reviews seeded for doctor id: {doctor_id}")
+        else:
+            logger.info("Doctor reviews already exist. Skipping seeding.")
 
-            # Seed doctor-patient relationships
+        # --- Seed doctor-patient relationships ---
+        docpat_count = await conn.fetchval("SELECT COUNT(*) FROM doctors_patients")
+        if docpat_count == 0:
             logger.info("Seeding doctor-patient relationships...")
             for doctor_id in doctors:
                 for patient_id in patients[:3]:  # Link first 3 patients to each doctor
@@ -163,20 +197,22 @@ async def seed_data():
                         doctor_id, patient_id
                     )
                 logger.info(f"Relationships seeded for doctor id: {doctor_id}")
+        else:
+            logger.info("Doctor-patient relationships already exist. Skipping seeding.")
 
-            # Seed appointments
+        # --- Seed appointments ---
+        appointments_count = await conn.fetchval("SELECT COUNT(*) FROM appointments")
+        appointment_ids = []
+        if appointments_count == 0:
             logger.info("Seeding appointments...")
-            # Appointments start from today (or August 1 if not August) and go into coming days in August
             today = datetime.now().date()
             base_august = date(today.year, 8, 1)
             for i, (doctor_id, patient_id) in enumerate(zip(doctors, patients)):
                 for j in range(5):
-                    # Calculate appointment date in August
                     if today.month == 8:
                         appt_date = today + timedelta(days=i*5 + j)
                     else:
                         appt_date = base_august + timedelta(days=i*5 + j)
-                    # Ensure we stay within August
                     if appt_date.month != 8:
                         break
                     slot_time = datetime.combine(appt_date, datetime.min.time()).replace(hour=10 + j, minute=0)
@@ -188,20 +224,25 @@ async def seed_data():
                         """,
                         doctor_id, patient_id, slot_time, f'Issue {j+1}', 'confirmed' if j % 2 == 0 else 'pending'
                     )
+                    appointment_ids.append(appointment_id)
                     logger.info(f"Appointment {j+1} created with id: {appointment_id}")
+        else:
+            logger.info("Appointments already exist. Skipping seeding.")
+            # Fetch existing appointment ids for downstream use
+            appointment_ids = [row['id'] for row in await conn.fetch("SELECT id FROM appointments ORDER BY id")]
 
-            # Seed appointments_summary
+        # --- Seed appointments_summary ---
+        summary_count = await conn.fetchval("SELECT COUNT(*) FROM appointments_summary")
+        if summary_count == 0:
             logger.info("Seeding appointments_summary...")
             for i, doctor_id in enumerate(doctors):
                 for j, patient_id in enumerate(patients[:3]):  # Link first 3 patients to each doctor
-                    # Follow up date in August, after appointments
                     today = datetime.now().date()
                     base_august = date(today.year, 8, 1)
                     if today.month == 8:
                         follow_up_date = today + timedelta(days=10 + i + j)
                     else:
                         follow_up_date = base_august + timedelta(days=10 + i + j)
-                    # Ensure we stay within August
                     if follow_up_date.month != 8:
                         follow_up_date = date(today.year, 8, 28)
                     follow_up_datetime = datetime.combine(follow_up_date, datetime.min.time()).replace(hour=10)
@@ -217,10 +258,16 @@ async def seed_data():
                         follow_up_datetime
                     )
                 logger.info(f"Summary seeded for doctor id: {doctor_id}")
+        else:
+            logger.info("Appointments summary already exist. Skipping seeding.")
 
-            # Seed chat messages
+        # --- Seed chat messages ---
+        chat_count = await conn.fetchval("SELECT COUNT(*) FROM chat_messages")
+        if chat_count == 0:
             logger.info("Seeding chat messages...")
-            for appointment_id in range(1, 6):  # Assuming 5 appointments
+            # Use appointment_ids if available, else fallback to range(1, 6)
+            appt_ids = appointment_ids if appointment_ids else list(range(1, 6))
+            for appointment_id in appt_ids[:5]:
                 for i in range(5):
                     await conn.execute(
                         """
@@ -230,8 +277,12 @@ async def seed_data():
                         appointment_id, patients[i % len(patients)], doctors[i % len(doctors)], f"Message {i+1}"
                     )
                 logger.info(f"Chat messages seeded for appointment id: {appointment_id}")
+        else:
+            logger.info("Chat messages already exist. Skipping seeding.")
 
-            # Seed feed items
+        # --- Seed feed items ---
+        feed_count = await conn.fetchval("SELECT COUNT(*) FROM feed_items")
+        if feed_count == 0:
             logger.info("Seeding feed items...")
             feed_data = [
                 ("Relaxation Tips", "article", "https://example.com/relax1", "<p>Tip 1...</p>", "Guide 1", patients[0]),
@@ -251,13 +302,16 @@ async def seed_data():
                     title, ctype, url, content, desc, user_id
                 )
             logger.info("Feed items seeded.")
+        else:
+            logger.info("Feed items already exist. Skipping seeding.")
 
-            # Seed video calls
+        # --- Seed video calls ---
+        videocall_count = await conn.fetchval("SELECT COUNT(*) FROM video_calls")
+        if videocall_count == 0:
             logger.info("Seeding video calls...")
             today = datetime.now().date()
             base_august = date(today.year, 8, 1)
             for i in range(5):
-                # Video call start_time in August, matching appointment logic
                 if today.month == 8:
                     call_date = today + timedelta(days=i)
                 else:
@@ -265,18 +319,23 @@ async def seed_data():
                 if call_date.month != 8:
                     break
                 start_time = datetime.combine(call_date, datetime.min.time()).replace(hour=10)
+                appt_id = appointment_ids[i] if i < len(appointment_ids) else i + 1
                 await conn.execute(
                     """
                     INSERT INTO video_calls (appointment_id, initiator_id, receiver_id, start_time, status)
                     VALUES ($1, $2, $3, $4, $5)
                     """,
-                    i + 1, patients[i % len(patients)], doctors[i % len(doctors)], start_time, 'initiated'
+                    appt_id, patients[i % len(patients)], doctors[i % len(doctors)], start_time, 'initiated'
                 )
             logger.info("Video calls seeded.")
+        else:
+            logger.info("Video calls already exist. Skipping seeding.")
 
-            # Seed categories and products
+        # --- Seed categories ---
+        categories_count = await conn.fetchval("SELECT COUNT(*) FROM categories")
+        categories = []
+        if categories_count == 0:
             logger.info("Seeding categories...")
-            categories = []
             cat_names = ["Wellness", "Mental Health", "Fitness", "Nutrition", "Sleep"]
             for name in cat_names:
                 cat_id = await conn.fetchval(
@@ -289,7 +348,13 @@ async def seed_data():
                 )
                 categories.append(cat_id)
                 logger.info(f"Category {name} created with id: {cat_id}")
+        else:
+            logger.info("Categories already exist. Skipping seeding.")
+            categories = [row['id'] for row in await conn.fetch("SELECT id FROM categories ORDER BY id")]
 
+        # --- Seed products ---
+        products_count = await conn.fetchval("SELECT COUNT(*) FROM products")
+        if products_count == 0:
             logger.info("Seeding products...")
             for i in range(7):
                 await conn.execute(
@@ -302,8 +367,12 @@ async def seed_data():
                     [f"Benefit {i+1}", f"Benefit {i+2}"], f'[{{"name": "Weight", "value": "{i+1} lbs"}}]'
                 )
             logger.info("Products seeded.")
+        else:
+            logger.info("Products already exist. Skipping seeding.")
 
-            # Seed product reviews
+        # --- Seed product reviews ---
+        prodrev_count = await conn.fetchval("SELECT COUNT(*) FROM product_reviews")
+        if prodrev_count == 0:
             logger.info("Seeding product reviews...")
             for i in range(6):
                 await conn.execute(
@@ -314,10 +383,13 @@ async def seed_data():
                     f"rev_{i+1:03d}", i + 1, patients[i % len(patients)], 3 + i % 3, f"Review {i+1}"
                 )
             logger.info("Product reviews seeded.")
+        else:
+            logger.info("Product reviews already exist. Skipping seeding.")
 
-            # Seed blog posts
+        # --- Seed blog posts ---
+        blog_count = await conn.fetchval("SELECT COUNT(*) FROM blog_posts")
+        if blog_count == 0:
             logger.info("Seeding blog posts...")
-            # Ensure every mood has 1 or 2 blog posts
             moods = ["Happy", "Calm", "Manic", "Sad", "Angry"]
             mood_blog_posts = [
                 # Happy
@@ -416,7 +488,6 @@ async def seed_data():
                     "mood_relevance": '{"Happy": 0.0, "Calm": 0.0, "Manic": 0.1, "Sad": 0.0, "Angry": 0.9}',
                 },
             ]
-            # Assign categories and users in a round-robin fashion
             for idx, post in enumerate(mood_blog_posts):
                 category_id = categories[idx % len(categories)]
                 user_id = patients[idx % len(patients)]
@@ -436,8 +507,12 @@ async def seed_data():
                     user_id
                 )
             logger.info("Blog posts seeded.")
+        else:
+            logger.info("Blog posts already exist. Skipping seeding.")
 
-            # Seed mood recommendations
+        # --- Seed mood recommendations ---
+        moodrec_count = await conn.fetchval("SELECT COUNT(*) FROM mood_recommendations")
+        if moodrec_count == 0:
             logger.info("Seeding mood recommendations...")
             for i, patient_id in enumerate(patients):
                 await conn.execute(
@@ -449,4 +524,252 @@ async def seed_data():
                 )
             logger.info("Mood recommendations seeded.")
         else:
-            logger.info("Users already exist. Skipping seeding.")
+            logger.info("Mood recommendations already exist. Skipping seeding.")
+
+        # --- Seed subscription plans ---
+        subscription_plans_count = await conn.fetchval("SELECT COUNT(*) FROM subscription_plans")
+        if subscription_plans_count == 0:
+            logger.info("Seeding subscription plans...")
+            subscription_plans = [
+                {
+                    "name": "Basic Plan",
+                    "type": "basic",
+                    "price": 5000.00,  # 5000 NGN
+                    "currency": "NGN",
+                    "duration_days": 30,
+                    "features": [
+                        "Basic consultation access",
+                        "Standard appointment booking",
+                        "Email support",
+                        "Basic health tracking",
+                        "Access to health articles"
+                    ],
+                    "is_active": True
+                },
+                {
+                    "name": "Premium Plan",
+                    "type": "premium",
+                    "price": 15000.00,  # 15000 NGN
+                    "currency": "NGN",
+                    "duration_days": 30,
+                    "features": [
+                        "All Basic features",
+                        "Priority consultation access",
+                        "Video call appointments",
+                        "24/7 support",
+                        "Advanced health tracking",
+                        "Prescription management",
+                        "Health reports",
+                        "Mental health assessments"
+                    ],
+                    "is_active": True
+                },
+                {
+                    "name": "Enterprise Plan",
+                    "type": "enterprise",
+                    "price": 50000.00,  # 50000 NGN
+                    "currency": "NGN",
+                    "duration_days": 30,
+                    "features": [
+                        "All Premium features",
+                        "Dedicated health coach",
+                        "Family member management",
+                        "Custom health plans",
+                        "Priority scheduling",
+                        "Health analytics dashboard",
+                        "Integration with health devices",
+                        "Monthly health reports",
+                        "Emergency consultation access"
+                    ],
+                    "is_active": True
+                }
+            ]
+            
+            for plan in subscription_plans:
+                await conn.execute(
+                    """
+                    INSERT INTO subscription_plans (name, type, price, currency, duration_days, features, is_active)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    """,
+                    plan["name"],
+                    plan["type"],
+                    plan["price"],
+                    plan["currency"],
+                    plan["duration_days"],
+                    plan["features"],
+                    plan["is_active"]
+                )
+            logger.info("Subscription plans seeded.")
+        else:
+            logger.info("Subscription plans already exist. Skipping seeding.")
+
+        # --- Seed sample subscriptions ---
+        subscriptions_count = await conn.fetchval("SELECT COUNT(*) FROM subscriptions")
+        if subscriptions_count == 0 and patients:
+            logger.info("Seeding sample subscriptions...")
+            sample_subscriptions = [
+                {
+                    "user_id": patients[0],
+                    "subscription_type": "premium",
+                    "status": "active",
+                    "start_date": datetime.utcnow() - timedelta(days=15),
+                    "end_date": datetime.utcnow() + timedelta(days=15),
+                    "auto_renew": True,
+                    "payment_method": "card"
+                },
+                {
+                    "user_id": patients[1] if len(patients) > 1 else patients[0],
+                    "subscription_type": "basic",
+                    "status": "active",
+                    "start_date": datetime.utcnow() - timedelta(days=5),
+                    "end_date": datetime.utcnow() + timedelta(days=25),
+                    "auto_renew": False,
+                    "payment_method": "bank_transfer"
+                },
+                {
+                    "user_id": patients[2] if len(patients) > 2 else patients[0],
+                    "subscription_type": "enterprise",
+                    "status": "active",
+                    "start_date": datetime.utcnow() - timedelta(days=30),
+                    "end_date": datetime.utcnow() + timedelta(days=1),
+                    "auto_renew": True,
+                    "payment_method": "card"
+                },
+                {
+                    "user_id": patients[3] if len(patients) > 3 else patients[0],
+                    "subscription_type": "premium",
+                    "status": "expired",
+                    "start_date": datetime.utcnow() - timedelta(days=60),
+                    "end_date": datetime.utcnow() - timedelta(days=30),
+                    "auto_renew": False,
+                    "payment_method": "card"
+                },
+                {
+                    "user_id": patients[4] if len(patients) > 4 else patients[0],
+                    "subscription_type": "basic",
+                    "status": "cancelled",
+                    "start_date": datetime.utcnow() - timedelta(days=45),
+                    "end_date": datetime.utcnow() - timedelta(days=15),
+                    "auto_renew": False,
+                    "payment_method": "card"
+                }
+            ]
+            
+            for subscription in sample_subscriptions:
+                await conn.execute(
+                    """
+                    INSERT INTO subscriptions (user_id, subscription_type, status, start_date, end_date, auto_renew, payment_method)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    """,
+                    subscription["user_id"],
+                    subscription["subscription_type"],
+                    subscription["status"],
+                    subscription["start_date"],
+                    subscription["end_date"],
+                    subscription["auto_renew"],
+                    subscription["payment_method"]
+                )
+            logger.info("Sample subscriptions seeded.")
+        else:
+            logger.info("Subscriptions already exist. Skipping seeding.")
+
+        # --- Seed notification preferences ---
+        notification_preferences_count = await conn.fetchval("SELECT COUNT(*) FROM notification_preferences")
+        if notification_preferences_count == 0 and patients:
+            logger.info("Seeding notification preferences...")
+            for patient_id in patients:
+                await conn.execute(
+                    """
+                    INSERT INTO notification_preferences (user_id, email_notifications, push_notifications, sms_notifications, appointment_reminders, subscription_alerts, system_notifications)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    """,
+                    patient_id,
+                    True,   # email_notifications
+                    True,   # push_notifications
+                    False,  # sms_notifications
+                    True,   # appointment_reminders
+                    True,   # subscription_alerts
+                    True    # system_notifications
+                )
+            logger.info("Notification preferences seeded.")
+        else:
+            logger.info("Notification preferences already exist. Skipping seeding.")
+
+        # --- Seed sample notifications ---
+        notifications_count = await conn.fetchval("SELECT COUNT(*) FROM notifications")
+        if notifications_count == 0 and patients:
+            logger.info("Seeding sample notifications...")
+            sample_notifications = [
+                {
+                    "user_id": patients[0],
+                    "title": "Welcome to TherapyApp!",
+                    "message": "Thank you for joining our platform. We're excited to help you on your wellness journey.",
+                    "notification_type": "system",
+                    "status": "read",
+                    "priority": "medium",
+                    "data": {"welcome_bonus": True}
+                },
+                {
+                    "user_id": patients[0],
+                    "title": "Appointment Reminder",
+                    "message": "Your appointment with Dr. Abimbola is scheduled for tomorrow at 2:00 PM.",
+                    "notification_type": "appointment",
+                    "status": "unread",
+                    "priority": "high",
+                    "data": {"appointment_id": 1, "doctor_name": "Dr. Abimbola"}
+                },
+                {
+                    "user_id": patients[1] if len(patients) > 1 else patients[0],
+                    "title": "Subscription Renewal",
+                    "message": "Your Premium subscription will renew in 3 days. Update your payment method if needed.",
+                    "notification_type": "subscription",
+                    "status": "unread",
+                    "priority": "medium",
+                    "data": {"subscription_type": "premium", "renewal_date": "2024-01-15"}
+                },
+                {
+                    "user_id": patients[2] if len(patients) > 2 else patients[0],
+                    "title": "New Health Article",
+                    "message": "Check out our latest article on 'Managing Stress During Work Hours'.",
+                    "notification_type": "message",
+                    "status": "unread",
+                    "priority": "low",
+                    "data": {"article_id": 1, "article_title": "Managing Stress During Work Hours"}
+                },
+                {
+                    "user_id": patients[3] if len(patients) > 3 else patients[0],
+                    "title": "System Maintenance",
+                    "message": "We will be performing system maintenance tonight at 2 AM. Services may be temporarily unavailable.",
+                    "notification_type": "system",
+                    "status": "unread",
+                    "priority": "medium",
+                    "data": {"maintenance_duration": "2 hours"}
+                },
+                {
+                    "user_id": patients[4] if len(patients) > 4 else patients[0],
+                    "title": "Emergency Contact Update",
+                    "message": "Please update your emergency contact information for better care coordination.",
+                    "notification_type": "reminder",
+                    "status": "unread",
+                    "priority": "high",
+                    "data": {"action_required": "update_emergency_contact"}
+                }
+            ]
+            
+            for notification in sample_notifications:
+                await conn.execute(
+                    """
+                    INSERT INTO notifications (user_id, title, message, notification_type, status, priority, data)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+                    """,
+                    notification["user_id"],
+                    notification["title"],
+                    notification["message"],
+                    notification["notification_type"],
+                    notification["status"],
+                    notification["priority"],
+                    json.dumps(notification["data"])
+                )
+            logger.info("Sample notifications seeded.")
+        else:
+            logger.info("Notifications already exist. Skipping seeding.")

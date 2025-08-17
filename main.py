@@ -13,6 +13,9 @@ from modules.video_call.router import router as video_call_router
 from modules.ecommerce.router import router as ecommerce_router
 from modules.blog.router import router as blog_router
 from modules.patient.router import router as patient_router
+from modules.subscription.router import router as subscription_router
+from modules.notifications.router import router as notifications_router
+from shared.stats_router import router as stats_router
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Mental Health Therapy App")
@@ -31,6 +34,9 @@ app.include_router(video_call_router, prefix="/video-call", tags=["video-call"])
 app.include_router(ecommerce_router, prefix="/ecommerce", tags=["ecommerce"])
 app.include_router(blog_router, prefix="/blog", tags=["blog"])
 app.include_router(patient_router, prefix="/patients", tags=["patients"])
+app.include_router(subscription_router, prefix="/subscriptions", tags=["subscriptions"])
+app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
+app.include_router(stats_router, prefix="/stats", tags=["stats"])
 
 app.add_middleware(
     CORSMiddleware,
